@@ -1,0 +1,292 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f0e8;
+    background-image: url('background.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    color: #333;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Decorative background elements */
+.bg-decoration {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.08;
+}
+
+.decoration {
+    position: absolute;
+    font-size: 40px;
+    animation: float 20s infinite ease-in-out;
+}
+
+.decoration-1 {
+    top: 15%;
+    left: 10%;
+    animation-delay: 0s;
+}
+
+.decoration-2 {
+    top: 25%;
+    right: 15%;
+    animation-delay: 3s;
+}
+
+.decoration-3 {
+    top: 50%;
+    left: 8%;
+    animation-delay: 6s;
+}
+
+.decoration-4 {
+    top: 60%;
+    right: 12%;
+    animation-delay: 9s;
+}
+
+.decoration-5 {
+    bottom: 20%;
+    left: 15%;
+    animation-delay: 12s;
+}
+
+.decoration-6 {
+    bottom: 15%;
+    right: 10%;
+    animation-delay: 15s;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+    }
+    25% {
+        transform: translateY(-20px) rotate(5deg);
+    }
+    50% {
+        transform: translateY(-10px) rotate(-5deg);
+    }
+    75% {
+        transform: translateY(-15px) rotate(3deg);
+    }
+}
+
+/* Logo in top left */
+.logo {
+    position: absolute;
+    top: 15px;
+    left: 30px;
+    z-index: 10;
+}
+
+.logo-image {
+    max-width: 420px;
+    max-height: 210px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.logo-placeholder {
+    width: 120px;
+    height: 60px;
+    background-color: #991305; /* Your burgundy color */
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 18px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Main container - centers everything */
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 100px 20px 40px;
+    gap: 60px;
+    position: relative;
+    z-index: 2;
+}
+
+/* Main content: hotel left, food right, one horizontal row on desktop */
+.visual-section {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 60px;
+    justify-content: center;
+    align-items: stretch;
+}
+
+.feature-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    flex: 0 0 380px;
+    max-width: 420px;
+    min-width: 0;
+}
+
+.feature-card-image {
+    width: 100%;
+    height: 280px;
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.feature-card-image:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+.hotel-card {
+    border: 2px solid rgba(153, 19, 5, 0.25);
+    border-bottom: none;
+}
+
+.food-card {
+    border: 2px solid rgba(102, 132, 37, 0.25);
+    border-bottom: none;
+}
+
+/* Buttons: full width of card, visually connected to image */
+.feature-card .btn {
+    width: 100%;
+    padding: 24px 32px;
+    font-size: 20px;
+    font-weight: 600;
+    border: none;
+    border-radius: 0 0 12px 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.feature-card .btn-room {
+    border: 2px solid rgba(153, 19, 5, 0.25);
+    border-top: none;
+}
+
+.feature-card .btn-food {
+    border: 2px solid rgba(102, 132, 37, 0.25);
+    border-top: none;
+}
+
+.btn {
+    padding: 24px 56px;
+    font-size: 20px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.btn-room {
+    background-color: #991305; /* Your burgundy color */
+    color: white;
+}
+
+.btn-room:hover {
+    background-color: #b8151a;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(153, 19, 5, 0.4);
+}
+
+.btn-food {
+    background-color: #668425; /* Your green color */
+    color: white;
+}
+
+.btn-food:hover {
+    background-color: #7a9a2e;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 132, 37, 0.4);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+    .logo {
+        top: 10px;
+        left: 20px;
+    }
+    
+    .logo-image {
+        max-width: 300px;
+        max-height: 150px;
+    }
+    
+    .logo-placeholder {
+        width: 100px;
+        height: 50px;
+        font-size: 16px;
+    }
+    
+    .decoration {
+        font-size: 30px;
+    }
+    
+    .visual-section {
+        gap: 40px;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .feature-card {
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    .feature-card-image {
+        height: 220px;
+    }
+    
+    .feature-card .btn {
+        padding: 22px 24px;
+        font-size: 18px;
+    }
+}

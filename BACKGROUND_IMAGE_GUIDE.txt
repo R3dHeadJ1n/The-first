@@ -1,0 +1,60 @@
+BACKGROUND IMAGE SIZE GUIDE
+============================
+
+RECOMMENDED SIZES FOR BACKGROUND IMAGE:
+---------------------------------------
+
+OPTION 1 - Standard Desktop (Best Quality):
+   Width: 1920 pixels
+   Height: 1080 pixels
+   This is the most common size and will look great on most screens.
+
+OPTION 2 - High Resolution (For Retina/4K Screens):
+   Width: 3840 pixels
+   Height: 2160 pixels
+   This is for very high-quality displays, but file size will be larger.
+
+OPTION 3 - Minimum Size (Still Works):
+   Width: 1280 pixels
+   Height: 720 pixels
+   Smaller file size, but might look slightly pixelated on large screens.
+
+RECOMMENDED ASPECT RATIO:
+-------------------------
+16:9 ratio (width:height)
+This matches most computer screens and will look best.
+
+FILE FORMATS:
+-------------
+- .jpg or .jpeg (best for photos, smaller file size)
+- .png (best if you need transparency, but larger file size)
+
+FILE SIZE TIPS:
+---------------
+- Try to keep the file under 2MB for faster loading
+- If your image is too large, you can compress it using online tools
+- Good quality images between 500KB - 1.5MB work great
+
+WHAT KIND OF IMAGE WORKS BEST:
+------------------------------
+- Subtle, not too busy (so text and buttons remain readable)
+- Light or medium brightness (dark images make text hard to read)
+- Related to restaurant/hotel theme:
+  * Cozy dining area
+  * Hotel lobby or room
+  * Food presentation
+  * Warm, welcoming atmosphere
+- Avoid very bright or very dark images
+
+HOW TO ADD YOUR BACKGROUND:
+---------------------------
+1. Save your image in the project folder: C:\Users\user\projects\The-first
+2. Name it: background.jpg (or background.png)
+3. Open style.css file
+4. Find line 10 (the background gradient line)
+5. Add this line right after line 10:
+   background-image: url('background.jpg');
+6. Save the file
+7. Refresh your browser
+
+The background will appear behind everything, and the gradient will be removed.

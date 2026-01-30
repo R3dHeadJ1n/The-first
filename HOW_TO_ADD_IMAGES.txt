@@ -1,0 +1,50 @@
+HOW TO ADD YOUR LOGO AND BACKGROUND IMAGE
+==========================================
+
+STEP 1: PREPARE YOUR IMAGES
+---------------------------
+1. Make sure your logo and background images are saved on your computer
+2. Good formats: .png, .jpg, .jpeg, .svg
+3. For logo: Recommended size is around 150-200 pixels wide
+4. For background: Can be any size, but larger is better (1920x1080 or bigger)
+
+STEP 2: COPY YOUR IMAGES TO THE PROJECT FOLDER
+-----------------------------------------------
+1. Open File Explorer
+2. Go to: C:\Users\user\projects\The-first
+3. Copy your logo file and paste it into this folder
+4. Copy your background image and paste it into this folder
+
+STEP 3: RENAME YOUR FILES (IMPORTANT!)
+---------------------------------------
+Your logo file MUST be named exactly: "logo.png"
+   - If your logo is a .jpg file, rename it to "logo.jpg"
+   - If your logo is a .png file, rename it to "logo.png"
+
+Your background file can be named anything, but we'll use: "background.jpg"
+   - Or "background.png" if it's a PNG file
+
+STEP 4: UPDATE THE CODE
+-----------------------
+For LOGO:
+- Open index.html in a text editor (like Notepad or Cursor)
+- Find this line: <img src="logo.png" alt="Restaurant & Hotel Logo"
+- Change "logo.png" to match your actual filename (e.g., "logo.jpg" if your file is logo.jpg)
+
+For BACKGROUND IMAGE:
+- Open style.css in a text editor
+- Find this line: /* background-image: url('background.jpg'); */
+- Remove the /* and */ symbols to uncomment it
+- Change "background.jpg" to match your actual filename
+
+STEP 5: SAVE AND REFRESH
+-------------------------
+1. Save both files (index.html and style.css)
+2. Open index.html in your browser
+3. Press F5 or Ctrl+R to refresh if you already had it open
+
+TROUBLESHOOTING
+---------------
+- If logo doesn't show: Check that the filename matches exactly (including .png or .jpg)
+- If background doesn't show: Make sure you removed the /* and */ symbols in CSS
+- If images are too big/small: We can adjust the size in the CSS file
