@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant & Hotel</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 <body>
     <!-- Language switcher (top-right) -->
     <div class="lang-switcher" aria-label="Language selector">
-        <button type="button" class="lang-btn is-active" data-lang="en">ENG</button>
-        <button type="button" class="lang-btn" data-lang="ru">RU</button>
+        <button type="button" class="lang-btn" id="langButton">ENG</button>
+        <div class="lang-dropdown" id="langDropdown">
+            <button type="button" class="lang-option" data-lang="en">ENG</button>
+            <button type="button" class="lang-option" data-lang="ru">RU</button>
+        </div>
     </div>
 
     <!-- Booking Modal -->
@@ -52,6 +57,7 @@
                 <div class="form-group">
                     <label for="phone"><span data-i18n="phone_label">Phone Number</span> <span class="required">*</span></label>
                     <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" data-i18n-placeholder="phone_placeholder" required>
+                    <p class="checkin-checkout-info" data-i18n="checkin_checkout_info">Check-in after 2:00 PM; Check-out before 12:00 PM</p>
                 </div>
                 
                 <button type="submit" class="btn btn-room btn-submit" data-i18n="book_submit">Book a Room</button>
@@ -66,6 +72,22 @@
             <h2 data-i18n="success_title">Booking Confirmed!</h2>
             <p data-i18n="success_message">Your room has been booked. We will contact you via WhatsApp.</p>
             <button class="btn btn-room" onclick="closeSuccessModal()" data-i18n="close">Close</button>
+        </div>
+    </div>
+
+    <!-- Food Menu Modal -->
+    <div id="menuModal" class="menu-modal">
+        <div class="menu-modal-content">
+            <button class="menu-close-btn" id="menuCloseBtn">&times;</button>
+            
+            
+            <div class="menu-pdf-container">
+                <iframe id="menuPdfViewer" src="" type="application/pdf" class="menu-pdf-frame"></iframe>
+            </div>
+            
+            <div class="menu-order-btn-container">
+                <button class="btn btn-food menu-order-btn" id="menuOrderBtn" data-i18n="order_food_whatsapp">ORDER FOOD</button>
+            </div>
         </div>
     </div>
     <!-- Decorative background elements -->
@@ -85,7 +107,7 @@
     </div>
 
     <!-- Main content area -->
-    <div class="container">
+    <div class="container main-section">
         <!-- Main content: hotel left, food right, button under each image -->
         <div class="visual-section">
             <!-- Hotel block (left) - clickable -->
@@ -98,14 +120,46 @@
             
             <!-- Food block (right) -->
             <div class="feature-card">
-                <div class="feature-card-image food-card">
+                <div class="feature-card-image food-card" onclick="openMenuModal()" style="cursor: pointer;">
                     <img src="food1.png" alt="Restaurant" class="card-image">
                 </div>
-                <button class="btn btn-food" data-i18n="order_main">Order Food</button>
+                <button class="btn btn-food" onclick="openMenuModal()" data-i18n="order_main">Order Food</button>
             </div>
+        </div>
+        
+        <!-- Scroll indicator -->
+        <div class="scroll-indicator" onclick="scrollToRooms()">
+            <div class="scroll-arrow">↓</div>
+            <p class="scroll-text" data-i18n="scroll_text">Scroll down to check the rooms</p>
         </div>
     </div>
 
+    <!-- Our Rooms Section -->
+    <section id="roomsSection" class="rooms-section">
+        <h2 class="rooms-title" data-i18n="rooms_title">Our Rooms</h2>
+        
+        <!-- Room type selector -->
+        <div class="room-type-selector">
+            <button class="room-type-btn active" data-room-type="single" data-i18n="room_type_single">Single Room</button>
+            <button class="room-type-btn" data-room-type="double" data-i18n="room_type_double">Double Room</button>
+        </div>
+        
+        <!-- Room gallery -->
+        <div class="room-gallery" id="roomGallery">
+            <!-- Images will be dynamically loaded here -->
+        </div>
+    </section>
+
+    <!-- Image Lightbox Modal -->
+    <div id="imageLightbox" class="image-lightbox">
+        <span class="image-lightbox-close">&times;</span>
+        <button class="lightbox-nav lightbox-prev" id="lightboxPrevBtn">←</button>
+        <img id="lightboxImage" src="" alt="Room image" class="lightbox-image">
+        <button class="lightbox-nav lightbox-next" id="lightboxNextBtn">→</button>
+    </div>
+
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="script.js"></script>
 </body>
 </html>
