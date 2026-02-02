@@ -26,20 +26,24 @@
             <form id="bookingForm">
                 <div class="form-group">
                     <label for="checkin" data-i18n="checkin_label">Check-in Date</label>
-                    <input type="date" id="checkin" name="checkin" required>
+                    <input type="text" id="checkin" name="checkin" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="checkout" data-i18n="checkout_label">Check-out Date</label>
-                    <input type="date" id="checkout" name="checkout" required>
+                    <input type="text" id="checkout" name="checkout" required>
+                </div>
+                
+                <div class="form-group" id="availabilityMessage" style="display: none; color: #d32f2f; font-size: 14px; margin-top: -10px; margin-bottom: 10px;">
+                    <span data-i18n="no_availability">No available rooms for selected dates</span>
                 </div>
                 
                 <div class="form-group">
                     <label for="roomType" data-i18n="roomtype_label">Room Type</label>
                     <select id="roomType" name="roomType" required>
                         <option value="" data-i18n="roomtype_placeholder">Select room type</option>
-                        <option value="single" data-i18n="roomtype_single">Single room — 700 THB</option>
-                        <option value="double" data-i18n="roomtype_double">Double room — 900 THB</option>
+                        <option value="big" data-i18n="roomtype_big">Big room</option>
+                        <option value="small" data-i18n="roomtype_small">Small room</option>
                     </select>
                 </div>
                 
@@ -159,7 +163,7 @@
     </div>
 
     <!-- Flatpickr JS -->
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

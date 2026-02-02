@@ -29,8 +29,8 @@ const translations = {
         checkout_label: 'Check-out Date',
         roomtype_label: 'Room Type',
         roomtype_placeholder: 'Select room type',
-        roomtype_single: 'Single room — 700 THB',
-        roomtype_double: 'Double room — 900 THB',
+        roomtype_big: 'Big room',
+        roomtype_small: 'Small room',
         guests_label: 'Number of Guests',
         guests_placeholder: 'Select number of guests',
         guests_1: '1 Guest',
@@ -55,7 +55,8 @@ const translations = {
         err_guests_required: 'Please select number of guests',
         err_phone_required: 'Phone number is required',
         err_phone_invalid: 'Please enter a valid phone number',
-        err_prefix: 'Please fill in all required fields correctly:\n\n'
+        err_prefix: 'Please fill in all required fields correctly:\\n\\n',
+        no_availability: 'No available rooms for selected dates'
     },
     ru: {
         // Main buttons
@@ -82,8 +83,8 @@ const translations = {
         checkout_label: 'Дата выезда',
         roomtype_label: 'Тип номера',
         roomtype_placeholder: 'Выберите тип номера',
-        roomtype_single: 'Одноместный номер — 700 THB',
-        roomtype_double: 'Двухместный номер — 900 THB',
+        roomtype_big: 'Большой номер',
+        roomtype_small: 'Малый номер',
         guests_label: 'Количество гостей',
         guests_placeholder: 'Выберите количество гостей',
         guests_1: '1 гость',
@@ -108,7 +109,8 @@ const translations = {
         err_guests_required: 'Выберите количество гостей',
         err_phone_required: 'Номер телефона обязателен',
         err_phone_invalid: 'Введите корректный номер телефона',
-        err_prefix: 'Пожалуйста, заполните все обязательные поля корректно:\n\n'
+        err_prefix: 'Пожалуйста, заполните все обязательные поля корректно:\\n\\n',
+        no_availability: 'Нет доступных номеров на выбранные даты'
     }
 };
 
@@ -192,10 +194,14 @@ let checkinPicker = null;
 let checkoutPicker = null;
 let bookedDates = [];
 
-// Fetch booked dates from backend
-async function fetchBookedDates() {
+// Fetch unavailable dates from backend for a specific room type
+async function fetchBookedDates(roomType) {
+    if (!roomType) {
+        return [];
+    }
+    
     try {
-        const response = await fetch(`${BACKEND_URL}/booked-dates`);
+        const response = await fetch(`${BACKEND_URL}/booked-dates?roomType=${roomType}`);
         if (response.ok) {
             bookedDates = await response.json();
             return bookedDates;
@@ -210,15 +216,30 @@ async function fetchBookedDates() {
 }
 
 // Initialize Flatpickr date pickers
-function initializeDatePickers() {
+async function initializeDatePickers(roomType) {
+    // Ensure Flatpickr is available
+    if (typeof flatpickr === 'undefined') {
+        console.error('Flatpickr is not loaded');
+        return;
+    }
+    
     const checkinInput = document.getElementById('checkin');
     const checkoutInput = document.getElementById('checkout');
     
-    if (!checkinInput || !checkoutInput) return;
+    if (!checkinInput || !checkoutInput || !roomType) return;
+    
+    // Fetch unavailable dates for this room type
+    await fetchBookedDates(roomType);
     
     // Destroy existing instances if they exist
-    if (checkinPicker) checkinPicker.destroy();
-    if (checkoutPicker) checkoutPicker.destroy();
+    if (checkinPicker) {
+        checkinPicker.destroy();
+        checkinPicker = null;
+    }
+    if (checkoutPicker) {
+        checkoutPicker.destroy();
+        checkoutPicker = null;
+    }
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -243,6 +264,8 @@ function initializeDatePickers() {
                     }
                 }
             }
+            // Check availability
+            checkAvailability();
         }
     });
     
@@ -250,15 +273,74 @@ function initializeDatePickers() {
     checkoutPicker = flatpickr(checkoutInput, {
         minDate: new Date(today.getTime() + 24 * 60 * 60 * 1000), // Tomorrow
         dateFormat: 'Y-m-d',
-        disable: bookedDates
+        disable: bookedDates,
+        onChange: function() {
+            // Check availability
+            checkAvailability();
+        }
     });
 }
 
+// Check if selected dates have availability
+function checkAvailability() {
+    const roomType = document.getElementById('roomType').value;
+    const checkin = checkinPicker && checkinPicker.selectedDates.length > 0 
+        ? checkinPicker.selectedDates[0].toISOString().split('T')[0]
+        : '';
+    const checkout = checkoutPicker && checkoutPicker.selectedDates.length > 0 
+        ? checkoutPicker.selectedDates[0].toISOString().split('T')[0]
+        : '';
+    
+    const submitButton = bookingForm.querySelector('button[type="submit"]');
+    const availabilityMessage = document.getElementById('availabilityMessage');
+    
+    if (!roomType || !checkin || !checkout) {
+        if (submitButton) submitButton.disabled = false;
+        if (availabilityMessage) availabilityMessage.style.display = 'none';
+        return;
+    }
+    
+    // Check if any date in the range is unavailable
+    const start = new Date(checkin);
+    const end = new Date(checkout);
+    let hasUnavailableDate = false;
+    
+    const current = new Date(start);
+    while (current < end) {
+        const dateStr = current.toISOString().split('T')[0];
+        if (bookedDates.includes(dateStr)) {
+            hasUnavailableDate = true;
+            break;
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    
+    if (hasUnavailableDate) {
+        if (submitButton) submitButton.disabled = true;
+        if (availabilityMessage) availabilityMessage.style.display = 'block';
+    } else {
+        if (submitButton) submitButton.disabled = false;
+        if (availabilityMessage) availabilityMessage.style.display = 'none';
+    }
+}
+
 // Open booking modal
-async function openBookingModal() {
-    // Fetch booked dates and initialize date pickers
-    await fetchBookedDates();
-    initializeDatePickers();
+function openBookingModal() {
+    // Reset form
+    bookingForm.reset();
+    
+    // Hide availability message
+    document.getElementById('availabilityMessage').style.display = 'none';
+    
+    // Destroy any existing pickers
+    if (checkinPicker) {
+        checkinPicker.destroy();
+        checkinPicker = null;
+    }
+    if (checkoutPicker) {
+        checkoutPicker.destroy();
+        checkoutPicker = null;
+    }
     
     bookingModal.classList.add('show');
     document.body.style.overflow = 'hidden'; // Prevent background scrolling
@@ -569,6 +651,39 @@ formInputs.forEach(function(input) {
 // Default language (ENG)
 applyTranslations('en');
 
+// Room type change handler
+const roomTypeSelect = document.getElementById('roomType');
+if (roomTypeSelect) {
+    roomTypeSelect.addEventListener('change', async function() {
+        const selectedRoomType = this.value;
+        const availabilityMessage = document.getElementById('availabilityMessage');
+        
+        if (selectedRoomType) {
+            // Hide availability message initially
+            availabilityMessage.style.display = 'none';
+            
+            // Initialize date pickers with availability for selected room type
+            await initializeDatePickers(selectedRoomType);
+            
+            // Re-check availability if dates are already selected
+            checkAvailability();
+        } else {
+            // Hide availability message if no room type selected
+            availabilityMessage.style.display = 'none';
+            
+            // Destroy pickers if no room type selected
+            if (checkinPicker) {
+                checkinPicker.destroy();
+                checkinPicker = null;
+            }
+            if (checkoutPicker) {
+                checkoutPicker.destroy();
+                checkoutPicker = null;
+            }
+        }
+    });
+}
+
 // ----------------------------
 // Rooms Section & Gallery
 // ----------------------------
@@ -797,3 +912,4 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
