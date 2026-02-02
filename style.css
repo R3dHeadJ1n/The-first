@@ -19,6 +19,40 @@ body {
     overflow-x: hidden;
 }
 
+/* Language switcher (top-right) */
+.lang-switcher {
+    position: fixed;
+    top: 2cm;
+    right: 2cm;
+    z-index: 1100;
+    display: flex;
+    gap: 0.4cm;
+}
+
+.lang-btn {
+    width: 3cm;
+    height: 3cm;
+    border-radius: 10px;
+    border: 2px solid rgba(0, 0, 0, 0.18);
+    background: rgba(255, 255, 255, 0.6);
+    color: #333;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    backdrop-filter: blur(6px);
+}
+
+.lang-btn:hover {
+    transform: translateY(-2px);
+}
+
+.lang-btn.is-active {
+    border-color: rgba(153, 19, 5, 0.55);
+    background: rgba(153, 19, 5, 0.10);
+    color: #991305;
+}
+
 /* Decorative background elements */
 .bg-decoration {
     position: fixed;
@@ -149,6 +183,10 @@ body {
     flex: 0 0 380px;
     max-width: 420px;
     min-width: 0;
+}
+
+.hotel-card-clickable {
+    cursor: pointer;
 }
 
 .feature-card-image {
@@ -288,5 +326,201 @@ body {
     .feature-card .btn {
         padding: 22px 24px;
         font-size: 18px;
+    }
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.3s ease;
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-content {
+    background-color: white;
+    padding: 40px;
+    border-radius: 16px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    position: relative;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 32px;
+    font-weight: bold;
+    color: #999;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.3s ease;
+}
+
+.modal-close:hover {
+    color: #991305;
+}
+
+.modal-content h2 {
+    color: #991305;
+    margin-bottom: 30px;
+    font-size: 28px;
+    text-align: center;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.required {
+    color: #991305;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: inherit;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    background-color: white;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #991305;
+    box-shadow: 0 0 0 3px rgba(153, 19, 5, 0.1);
+}
+
+.form-group input:invalid:not(:placeholder-shown) {
+    border-color: #d32f2f;
+}
+
+.btn-submit {
+    width: 100%;
+    margin-top: 10px;
+    padding: 18px 32px;
+    font-size: 18px;
+}
+
+/* Success Modal */
+.success-content {
+    text-align: center;
+    padding: 50px 40px;
+}
+
+.success-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #668425;
+    color: white;
+    font-size: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    font-weight: bold;
+    animation: scaleIn 0.4s ease;
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0);
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+.success-content h2 {
+    color: #668425;
+    margin-bottom: 16px;
+}
+
+.success-content p {
+    color: #555;
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+.success-content .btn {
+    min-width: 200px;
+}
+
+/* Responsive Modal */
+@media (max-width: 768px) {
+    .modal-content {
+        padding: 30px 24px;
+        width: 95%;
+    }
+    
+    .modal-content h2 {
+        font-size: 24px;
+    }
+    
+    .form-group input,
+    .form-group select {
+        padding: 12px 14px;
+        font-size: 15px;
+    }
+    
+    .success-content {
+        padding: 40px 24px;
+    }
+    
+    .success-icon {
+        width: 70px;
+        height: 70px;
+        font-size: 42px;
     }
 }

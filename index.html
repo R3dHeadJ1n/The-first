@@ -7,6 +7,67 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Language switcher (top-right) -->
+    <div class="lang-switcher" aria-label="Language selector">
+        <button type="button" class="lang-btn is-active" data-lang="en">ENG</button>
+        <button type="button" class="lang-btn" data-lang="ru">RU</button>
+    </div>
+
+    <!-- Booking Modal -->
+    <div id="bookingModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 data-i18n="booking_title">Book a Room</h2>
+            <form id="bookingForm">
+                <div class="form-group">
+                    <label for="checkin" data-i18n="checkin_label">Check-in Date</label>
+                    <input type="date" id="checkin" name="checkin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="checkout" data-i18n="checkout_label">Check-out Date</label>
+                    <input type="date" id="checkout" name="checkout" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="roomType" data-i18n="roomtype_label">Room Type</label>
+                    <select id="roomType" name="roomType" required>
+                        <option value="" data-i18n="roomtype_placeholder">Select room type</option>
+                        <option value="single" data-i18n="roomtype_single">Single room — 700 THB</option>
+                        <option value="double" data-i18n="roomtype_double">Double room — 900 THB</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="guests" data-i18n="guests_label">Number of Guests</label>
+                    <select id="guests" name="guests" required>
+                        <option value="" data-i18n="guests_placeholder">Select number of guests</option>
+                        <option value="1" data-i18n="guests_1">1 Guest</option>
+                        <option value="2" data-i18n="guests_2">2 Guests</option>
+                        <option value="3" data-i18n="guests_3">3 Guests</option>
+                        <option value="4" data-i18n="guests_4">4 Guests</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone"><span data-i18n="phone_label">Phone Number</span> <span class="required">*</span></label>
+                    <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" data-i18n-placeholder="phone_placeholder" required>
+                </div>
+                
+                <button type="submit" class="btn btn-room btn-submit" data-i18n="book_submit">Book a Room</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Success Confirmation Modal -->
+    <div id="successModal" class="modal">
+        <div class="modal-content success-content">
+            <div class="success-icon">✓</div>
+            <h2 data-i18n="success_title">Booking Confirmed!</h2>
+            <p data-i18n="success_message">Your room has been booked. We will contact you via WhatsApp.</p>
+            <button class="btn btn-room" onclick="closeSuccessModal()" data-i18n="close">Close</button>
+        </div>
+    </div>
     <!-- Decorative background elements -->
     <div class="bg-decoration">
         <div class="decoration decoration-1">🍴</div>
@@ -27,12 +88,12 @@
     <div class="container">
         <!-- Main content: hotel left, food right, button under each image -->
         <div class="visual-section">
-            <!-- Hotel block (left) -->
-            <div class="feature-card">
+            <!-- Hotel block (left) - clickable -->
+            <div class="feature-card hotel-card-clickable" onclick="openBookingModal()">
                 <div class="feature-card-image hotel-card">
                     <img src="hotel1.png" alt="Hotel" class="card-image">
                 </div>
-                <button class="btn btn-room">Book a Room</button>
+                <button class="btn btn-room" onclick="event.stopPropagation(); openBookingModal();" data-i18n="book_main">Book a Room</button>
             </div>
             
             <!-- Food block (right) -->
@@ -40,9 +101,11 @@
                 <div class="feature-card-image food-card">
                     <img src="food1.png" alt="Restaurant" class="card-image">
                 </div>
-                <button class="btn btn-food">Order Food</button>
+                <button class="btn btn-food" data-i18n="order_main">Order Food</button>
             </div>
         </div>
     </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
