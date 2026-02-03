@@ -324,7 +324,6 @@
             
             <div class="admin-buttons">
                 <button type="button" id="adminSaveBtn" class="btn">Mark as Unavailable</button>
-                <button type="button" id="adminRemoveBtn" class="btn btn-secondary">Remove Unavailability</button>
             </div>
             
             <div id="adminMessage" class="admin-message"></div>
@@ -550,7 +549,6 @@
         // Save unavailability
         document.addEventListener('DOMContentLoaded', function() {
             const saveBtn = document.getElementById('adminSaveBtn');
-            const removeBtn = document.getElementById('adminRemoveBtn');
             
             if (saveBtn) {
                 saveBtn.addEventListener('click', async () => {
@@ -592,54 +590,6 @@
                             loadBookings(); // Refresh bookings list
                         } else {
                             showAdminMessage(data.error || 'Error saving booking', 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        showAdminMessage('Error connecting to server. Make sure backend is running.', 'error');
-                    }
-                });
-            }
-            
-            if (removeBtn) {
-                removeBtn.addEventListener('click', async () => {
-                    const roomId = document.getElementById('adminRoomSelect').value;
-                    const checkIn = adminCheckInPicker?.selectedDates[0];
-                    const checkOut = adminCheckOutPicker?.selectedDates[0];
-                    
-                    if (!roomId) {
-                        showAdminMessage('Please select a room', 'error');
-                        return;
-                    }
-                    
-                    if (!checkIn || !checkOut) {
-                        showAdminMessage('Please select both check-in and check-out dates', 'error');
-                        return;
-                    }
-                    
-                    if (checkOut <= checkIn) {
-                        showAdminMessage('Check-out date must be after check-in date', 'error');
-                        return;
-                    }
-                    
-                    // Format dates in local timezone to avoid UTC conversion issues
-                    const checkInStr = formatDateForBackend(checkIn);
-                    const checkOutStr = formatDateForBackend(checkOut);
-                    
-                    try {
-                        const response = await fetch(`${BACKEND_URL}/admin/book-room`, {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ roomId, checkIn: checkInStr, checkOut: checkOutStr })
-                        });
-                        
-                        const data = await response.json();
-                        if (data.success) {
-                            showAdminMessage(data.message || 'Unavailability removed', 'success');
-                            adminCheckInPicker.clear();
-                            adminCheckOutPicker.clear();
-                            loadBookings(); // Refresh bookings list
-                        } else {
-                            showAdminMessage(data.error || 'Error removing booking', 'error');
                         }
                     } catch (error) {
                         console.error('Error:', error);
