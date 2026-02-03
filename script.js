@@ -189,10 +189,28 @@ const successModal = document.getElementById('successModal');
 const bookingForm = document.getElementById('bookingForm');
 const modalClose = document.querySelector('.modal-close');
 
+// Ensure form doesn't submit normally - set onsubmit handler immediately
+if (bookingForm) {
+    bookingForm.onsubmit = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+    };
+    console.log('✅ Form onsubmit handler set to prevent default');
+}
+
 // Flatpickr instances
 let checkinPicker = null;
 let checkoutPicker = null;
 let bookedDates = [];
+
+// Format date to YYYY-MM-DD in local timezone (avoid UTC conversion)
+function formatDateForBackend(dateObj) {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 // Fetch unavailable dates from backend for a specific room type
 async function fetchBookedDates(roomType) {
@@ -289,10 +307,10 @@ async function initializeDatePickers(roomType) {
 function checkAvailability() {
     const roomType = document.getElementById('roomType').value;
     const checkin = checkinPicker && checkinPicker.selectedDates.length > 0 
-        ? checkinPicker.selectedDates[0].toISOString().split('T')[0]
+        ? formatDateForBackend(checkinPicker.selectedDates[0])
         : '';
     const checkout = checkoutPicker && checkoutPicker.selectedDates.length > 0 
-        ? checkoutPicker.selectedDates[0].toISOString().split('T')[0]
+        ? formatDateForBackend(checkoutPicker.selectedDates[0])
         : '';
     
     const submitButton = bookingForm.querySelector('button[type="submit"]');
@@ -305,13 +323,13 @@ function checkAvailability() {
     }
     
     // Check if any date in the range is unavailable
-    const start = new Date(checkin);
-    const end = new Date(checkout);
+    const start = new Date(checkin + 'T00:00:00');
+    const end = new Date(checkout + 'T00:00:00');
     let hasUnavailableDate = false;
     
     const current = new Date(start);
     while (current < end) {
-        const dateStr = current.toISOString().split('T')[0];
+        const dateStr = formatDateForBackend(current);
         if (bookedDates.includes(dateStr)) {
             hasUnavailableDate = true;
             break;
@@ -376,8 +394,48 @@ function closeBookingModal() {
 
 // Open success modal
 function openSuccessModal() {
-    successModal.classList.add('show');
-    document.body.style.overflow = 'hidden';
+    // Try to get the element if it wasn't found at page load
+    let modal = successModal || document.getElementById('successModal');
+    
+    if (!modal) {
+        console.error('❌ Success modal element not found! Showing alert instead.');
+        alert('Booking successful! We will contact you via WhatsApp.');
+        return;
+    }
+    
+    // Close booking modal first
+    if (bookingModal) {
+        bookingModal.classList.remove('show');
+        bookingModal.style.display = 'none';
+    }
+    
+    // Small delay to ensure booking modal is closed before showing success
+    setTimeout(() => {
+        // Store opening time BEFORE showing (prevents immediate close)
+        modal.dataset.openedTime = Date.now().toString();
+        
+        // Show the modal - use inline styles to ensure it's visible
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+        modal.style.zIndex = '10000';
+        modal.style.visibility = 'visible';
+        modal.style.opacity = '1';
+        modal.classList.add('show');
+        
+        document.body.style.overflow = 'hidden';
+        
+        // Auto-close after 5 seconds (5000ms) - give user time to read
+        setTimeout(() => {
+            closeSuccessModal();
+        }, 5000);
+    }, 100);
 }
 
 // Close success modal
@@ -394,8 +452,17 @@ window.addEventListener('click', function(event) {
     if (event.target === bookingModal) {
         closeBookingModal();
     }
-    if (event.target === successModal) {
-        closeSuccessModal();
+    // Only close success modal if clicking on the overlay (not the content)
+    // and the modal has been open for at least 500ms (prevents immediate close)
+    if (event.target === successModal && successModal.classList.contains('show')) {
+        const modalContent = successModal.querySelector('.modal-content');
+        if (modalContent && !modalContent.contains(event.target)) {
+            // Check if modal was just opened (prevent immediate close)
+            const openedTime = successModal.dataset.openedTime;
+            if (openedTime && Date.now() - parseInt(openedTime) > 500) {
+                closeSuccessModal();
+            }
+        }
     }
 });
 
@@ -563,8 +630,12 @@ async function sendBookingToBackend(checkin, checkout, roomType, guests, phone) 
 let isSubmitting = false; // Prevent double submission
 
 bookingForm.addEventListener('submit', function(event) {
+    // CRITICAL: Always prevent default form submission
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
+    
+    console.log('📋 Form submit event triggered');
     
     // Prevent double submission
     if (isSubmitting) {
@@ -581,10 +652,10 @@ bookingForm.addEventListener('submit', function(event) {
     
     // Get form values from Flatpickr instances
     const checkin = checkinPicker && checkinPicker.selectedDates.length > 0 
-        ? checkinPicker.selectedDates[0].toISOString().split('T')[0]
+        ? formatDateForBackend(checkinPicker.selectedDates[0])
         : document.getElementById('checkin').value;
     const checkout = checkoutPicker && checkoutPicker.selectedDates.length > 0 
-        ? checkoutPicker.selectedDates[0].toISOString().split('T')[0]
+        ? formatDateForBackend(checkoutPicker.selectedDates[0])
         : document.getElementById('checkout').value;
     const roomType = document.getElementById('roomType').value;
     const guests = document.getElementById('guests').value;
@@ -642,8 +713,11 @@ bookingForm.addEventListener('submit', function(event) {
     submitButton.style.cursor = 'not-allowed';
     
     // Send booking to backend
+    console.log('📝 Form submitted, calling sendBookingToBackend...');
     sendBookingToBackend(checkin, checkout, roomType, guests, phone)
         .then(result => {
+            console.log('📥 Received result from sendBookingToBackend:', result);
+            
             // Re-enable button
             isSubmitting = false;
             submitButton.disabled = false;
@@ -651,19 +725,23 @@ bookingForm.addEventListener('submit', function(event) {
             submitButton.style.opacity = '1';
             submitButton.style.cursor = 'pointer';
             
-            if (result.success) {
-                // Close booking modal
-                closeBookingModal();
-                
-                // Show success modal immediately
+            if (result && result.success) {
+                console.log('✅ Booking successful! result.success =', result.success);
+                console.log('🎯 About to call openSuccessModal()...');
+                // Show success modal (it will close booking modal internally)
                 openSuccessModal();
+                console.log('✅ openSuccessModal() called');
             } else {
+                console.log('❌ Booking failed. result:', result);
                 // Show error message
-                const errorMsg = result.error || 'Failed to submit booking. Please try again.';
+                const errorMsg = result?.error || 'Failed to submit booking. Please try again.';
+                console.log('Showing error alert:', errorMsg);
                 alert(errorMsg);
             }
         })
         .catch(error => {
+            console.error('💥 Promise rejection in booking form:', error);
+            console.error('Error details:', error.message, error.stack);
             // Re-enable button on error
             isSubmitting = false;
             submitButton.disabled = false;
@@ -675,6 +753,8 @@ bookingForm.addEventListener('submit', function(event) {
             alert('An unexpected error occurred. Please try again.');
         });
     
+    // CRITICAL: Always return false to prevent form submission
+    console.log('📋 Returning false to prevent form submission');
     return false;
 });
 

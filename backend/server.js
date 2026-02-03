@@ -8,9 +8,13 @@ const path = require('path');
 const session = require('express-session');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = 3001;
+
+// Track server start time
+const serverStartTime = new Date();
 
 // Middleware
 app.use(cors({
@@ -237,7 +241,7 @@ async function addBookingToExcel(booking) {
         newRow.getCell(7).value = booking.phone || '';
         newRow.getCell(8).value = booking.source;
         newRow.getCell(9).value = booking.createdAt;
-        newRow.getCell(10).value = 'active';
+        newRow.getCell(10).value = booking.status || 'active';
         
         // Style the new row
         newRow.eachCell((cell) => {
@@ -296,8 +300,8 @@ async function addBookingToExcel(booking) {
     }
 }
 
-// Mark a booking as deleted (change row color to red)
-async function markBookingAsDeleted(bookingId) {
+// Update booking status in Excel (optionally update roomId)
+async function updateBookingStatus(bookingId, newStatus, roomId = null) {
     try {
         const workbook = await initializeExcelFile();
         const worksheet = workbook.getWorksheet('Bookings');
@@ -309,17 +313,38 @@ async function markBookingAsDeleted(bookingId) {
             
             // Check ID column (1st column)
             if (row.getCell(1).value === bookingId) {
-                // Mark as deleted in Status column (10th column)
-                row.getCell(10).value = 'deleted';
+                // Update status in Status column (10th column)
+                row.getCell(10).value = newStatus;
                 
-                // Change row background color to red
-                row.eachCell((cell) => {
-                    cell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: 'FFFF0000' } // Red
-                    };
-                });
+                // If roomId is provided, update it in Room ID column (3rd column)
+                if (roomId !== null) {
+                    row.getCell(3).value = roomId;
+                }
+                
+                // If marking as deleted, change row background color to red
+                if (newStatus === 'deleted') {
+                    row.eachCell((cell) => {
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFFF0000' } // Red
+                        };
+                    });
+                } else if (newStatus === 'confirmed') {
+                    // If confirming, change row background color to green
+                    row.eachCell((cell) => {
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FF00FF00' } // Green
+                        };
+                    });
+                } else {
+                    // Remove any background color for other statuses
+                    row.eachCell((cell) => {
+                        cell.fill = null;
+                    });
+                }
                 
                 found = true;
             }
@@ -332,9 +357,14 @@ async function markBookingAsDeleted(bookingId) {
         
         return false;
     } catch (error) {
-        console.error('Error marking booking as deleted:', error);
+        console.error('Error updating booking status:', error);
         return false;
     }
+}
+
+// Mark a booking as deleted (change row color to red)
+async function markBookingAsDeleted(bookingId) {
+    return await updateBookingStatus(bookingId, 'deleted');
 }
 
 // Admin routes - define BEFORE static middleware to take precedence
@@ -351,6 +381,66 @@ app.get('/admin.html', (req, res) => {
 // Test endpoint to verify server is running
 app.get('/admin/test', (req, res) => {
     res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// GET /admin/status - Get server status information
+app.get('/admin/status', (req, res) => {
+    try {
+        const uptime = process.uptime(); // Uptime in seconds
+        const uptimeHours = Math.floor(uptime / 3600);
+        const uptimeMinutes = Math.floor((uptime % 3600) / 60);
+        const uptimeSeconds = Math.floor(uptime % 60);
+        
+        const uptimeFormatted = uptimeHours > 0 
+            ? `${uptimeHours}h ${uptimeMinutes}m ${uptimeSeconds}s`
+            : uptimeMinutes > 0
+            ? `${uptimeMinutes}m ${uptimeSeconds}s`
+            : `${uptimeSeconds}s`;
+        
+        res.json({
+            status: 'online',
+            port: PORT,
+            uptime: uptimeFormatted,
+            uptimeSeconds: uptime,
+            startTime: serverStartTime.toISOString(),
+            nodeVersion: process.version,
+            platform: process.platform,
+            memory: {
+                used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024), // MB
+                total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024), // MB
+                rss: Math.round(process.memoryUsage().rss / 1024 / 1024) // MB
+            }
+        });
+    } catch (error) {
+        console.error('Error getting server status:', error);
+        res.status(500).json({ status: 'error', error: 'Failed to get server status' });
+    }
+});
+
+// POST /admin/restart - Restart the backend server
+// Note: This will exit the process. If running with start-server.bat, it will auto-restart in the same window.
+app.post('/admin/restart', async (req, res) => {
+    try {
+        console.log('Restart request received from admin');
+        
+        // Send response immediately before restarting
+        res.json({ 
+            success: true, 
+            message: 'Backend server restart initiated. Server will exit and restart in 2 seconds.' 
+        });
+        
+        // Give time for response to be sent, then exit
+        // If running with start-server.bat wrapper, it will automatically restart in the same window
+        setTimeout(() => {
+            console.log('Restarting server... Exiting process.');
+            console.log('If running with start-server.bat, server will restart automatically in the same window.');
+            process.exit(0);
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error in restart endpoint:', error);
+        res.status(500).json({ success: false, error: 'Failed to restart server' });
+    }
 });
 
 // Admin login endpoint
@@ -408,27 +498,55 @@ app.get('/admin/check-auth', (req, res) => {
     }
 });
 
-// GET /admin/bookings - Get all admin bookings (must be before static middleware)
+// GET /admin/bookings - Get all confirmed/admin bookings (must be before static middleware)
 app.get('/admin/bookings', async (req, res) => {
     try {
         console.log('GET /admin/bookings - Request received');
         const allBookings = await readBookingsFromExcel();
         console.log('Total bookings:', allBookings.length);
         
-        const adminBookings = allBookings.filter(booking => booking.source === 'admin');
-        console.log('Admin bookings found:', adminBookings.length);
+        // Get admin bookings OR confirmed user bookings (exclude unconfirmed)
+        const adminBookings = allBookings.filter(booking => 
+            booking.source === 'admin' || (booking.source === 'user' && booking.status === 'confirmed')
+        );
+        console.log('Admin/confirmed bookings found:', adminBookings.length);
         
         // Sort by check-in date, then by room
         adminBookings.sort((a, b) => {
             if (a.checkIn !== b.checkIn) {
                 return a.checkIn.localeCompare(b.checkIn);
             }
-            return a.roomId.localeCompare(b.roomId);
+            return (a.roomId || '').localeCompare(b.roomId || '');
         });
         
         res.json(adminBookings);
     } catch (error) {
         console.error('Error getting admin bookings:', error);
+        res.status(500).json({ error: 'Failed to read bookings from Excel' });
+    }
+});
+
+// GET /admin/unconfirmed-bookings - Get all unconfirmed user bookings
+app.get('/admin/unconfirmed-bookings', async (req, res) => {
+    try {
+        console.log('GET /admin/unconfirmed-bookings - Request received');
+        const allBookings = await readBookingsFromExcel();
+        
+        // Get only unconfirmed user bookings
+        const unconfirmedBookings = allBookings.filter(booking => 
+            booking.source === 'user' && booking.status === 'unconfirmed'
+        );
+        
+        console.log('Unconfirmed bookings found:', unconfirmedBookings.length);
+        
+        // Sort by creation date (newest first)
+        unconfirmedBookings.sort((a, b) => {
+            return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+        
+        res.json(unconfirmedBookings);
+    } catch (error) {
+        console.error('Error getting unconfirmed bookings:', error);
         res.status(500).json({ error: 'Failed to read bookings from Excel' });
     }
 });
@@ -447,6 +565,130 @@ app.delete('/admin/booking/:id', async (req, res) => {
     } catch (error) {
         console.error('Error deleting booking:', error);
         res.status(500).json({ success: false, error: 'Failed to delete booking' });
+    }
+});
+
+// GET /admin/available-rooms - Get available rooms for a date range
+app.get('/admin/available-rooms', async (req, res) => {
+    try {
+        const { roomType, checkIn, checkOut } = req.query;
+        
+        if (!roomType || !checkIn || !checkOut) {
+            return res.status(400).json({ error: 'roomType, checkIn, and checkOut are required' });
+        }
+        
+        if (roomType !== 'big' && roomType !== 'small') {
+            return res.status(400).json({ error: 'roomType must be "big" or "small"' });
+        }
+        
+        // Get all bookings
+        const allBookings = await readBookingsFromExcel();
+        
+        // Get all rooms for this type
+        const allRooms = ROOM_INVENTORY[roomType].rooms;
+        
+        console.log(`Available rooms check: roomType=${roomType}, checkIn=${checkIn}, checkOut=${checkOut}`);
+        console.log(`Total bookings from Excel: ${allBookings.length}`);
+        console.log(`Total rooms for ${roomType}: ${allRooms.length}`, allRooms);
+        
+        // If no bookings at all, all rooms are available
+        if (!allBookings || allBookings.length === 0) {
+            console.log('No bookings found - all rooms are available');
+            return res.json({ 
+                availableRooms: allRooms,
+                totalRooms: allRooms.length,
+                bookedRooms: []
+            });
+        }
+        
+        // Get dates in the range
+        const dates = getDatesBetween(checkIn, checkOut);
+        console.log(`Requested dates:`, dates);
+        
+        // Find which rooms are booked for any date in this range
+        const bookedRooms = new Set();
+        let checkedBookings = 0;
+        let skippedBookings = 0;
+        
+        allBookings.forEach(booking => {
+            // Skip unconfirmed and deleted bookings
+            const status = booking.status || 'active'; // Default to active if status is missing
+            if (status === 'unconfirmed' || status === 'deleted') {
+                skippedBookings++;
+                console.log(`Skipping booking ${booking.id}: status=${status}`);
+                return;
+            }
+            
+            // Only check bookings of the same room type
+            if (!booking.roomType || booking.roomType !== roomType) {
+                return;
+            }
+            
+            checkedBookings++;
+            
+            // Check if booking overlaps with the requested dates
+            if (!booking.checkIn || !booking.checkOut) {
+                console.log(`Booking ${booking.id} missing dates, skipping`);
+                return;
+            }
+            
+            const bookingDates = getDatesBetween(booking.checkIn, booking.checkOut);
+            const hasOverlap = dates.some(date => bookingDates.includes(date));
+            
+            if (hasOverlap) {
+                console.log(`Booking ${booking.id} overlaps: roomId=${booking.roomId || 'null'}, roomType=${booking.roomType}, status=${status}`);
+                if (booking.roomId) {
+                    // Specific room booking - mark this room as booked
+                    bookedRooms.add(booking.roomId);
+                } else {
+                    // General booking (any room of this type) - mark all as booked
+                    console.log(`General booking - marking all ${roomType} rooms as booked`);
+                    allRooms.forEach(room => bookedRooms.add(room));
+                }
+            }
+        });
+        
+        console.log(`Checked ${checkedBookings} bookings, skipped ${skippedBookings} bookings`);
+        console.log(`Total rooms: ${allRooms.length}, Booked rooms: ${Array.from(bookedRooms).length}`);
+        
+        // Available rooms are those not in bookedRooms
+        const availableRooms = allRooms.filter(room => !bookedRooms.has(room));
+        
+        console.log(`Available rooms: ${availableRooms.length}`, availableRooms);
+        
+        res.json({ 
+            availableRooms: availableRooms,
+            totalRooms: allRooms.length,
+            bookedRooms: Array.from(bookedRooms)
+        });
+    } catch (error) {
+        console.error('Error getting available rooms:', error);
+        res.status(500).json({ error: 'Failed to get available rooms' });
+    }
+});
+
+// POST /admin/confirm-booking/:id - Confirm an unconfirmed booking with room assignment
+app.post('/admin/confirm-booking/:id', async (req, res) => {
+    try {
+        const bookingId = req.params.id;
+        const { roomId } = req.body;
+        
+        if (!roomId) {
+            return res.status(400).json({ success: false, error: 'roomId is required' });
+        }
+        
+        console.log('Confirming booking:', bookingId, 'with room:', roomId);
+        
+        const success = await updateBookingStatus(bookingId, 'confirmed', roomId);
+        
+        if (success) {
+            res.json({ success: true, message: 'Booking confirmed successfully' });
+        } else {
+            res.status(404).json({ success: false, error: 'Booking not found' });
+        }
+    } catch (error) {
+        console.error('Error confirming booking:', error);
+        res.status(500).json({ success: false, error: 'Failed to confirm booking' });
     }
 });
 
@@ -767,7 +1009,7 @@ app.post('/book-room', async (req, res) => {
             });
         }
         
-        // Create booking object
+        // Create booking object with unconfirmed status
         const booking = {
             id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             roomType,
@@ -777,7 +1019,8 @@ app.post('/book-room', async (req, res) => {
             guests,
             phone,
             source: 'user',
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            status: 'unconfirmed' // User bookings start as unconfirmed
         };
         
         // Save booking to Excel

@@ -198,6 +198,16 @@
             border: 1px solid #f5c6cb;
         }
 
+        .admin-message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .restart-btn:hover {
+            background-color: #f57c00 !important;
+        }
+
         .bookings-list {
             background: white;
             padding: 30px;
@@ -255,10 +265,112 @@
             background-color: #da190b;
         }
 
+        .booking-confirm-btn {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .booking-confirm-btn:hover {
+            background-color: #45a049;
+        }
+
+        .booking-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .server-status {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .server-status.online {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .server-status.offline {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.online {
+            background-color: #28a745;
+        }
+
+        .status-indicator.offline {
+            background-color: #dc3545;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .no-bookings {
             text-align: center;
             color: #999;
             padding: 20px;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        .modal-content {
+            background-color: #fff5e6;
+            margin: 15% auto;
+            padding: 30px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .close-modal {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-modal:hover,
+        .close-modal:focus {
+            color: #000;
         }
     </style>
 </head>
@@ -284,7 +396,14 @@
     <div id="adminContent" class="admin-content">
         <div class="admin-header">
             <h1>Admin Panel</h1>
-            <button class="logout-btn" id="logoutBtn">Logout</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <div id="serverStatus" class="server-status" style="padding: 8px 15px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                    <span class="status-indicator" style="width: 10px; height: 10px; border-radius: 50%; background-color: #ccc; display: inline-block;"></span>
+                    <span class="status-text">Checking...</span>
+                </div>
+                <button class="restart-btn" id="restartBtn" style="background-color: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Restart Backend</button>
+                <button class="logout-btn" id="logoutBtn">Logout</button>
+            </div>
         </div>
         
         <div class="admin-panel-section">
@@ -327,6 +446,32 @@
             </div>
             
             <div id="adminMessage" class="admin-message"></div>
+        </div>
+        
+        <div class="admin-panel-section">
+            <h2>Unconfirmed Bookings</h2>
+            <div id="unconfirmedBookingsList">
+                <div class="no-bookings">Loading unconfirmed bookings...</div>
+            </div>
+        </div>
+
+        <!-- Room Selection Modal -->
+        <div id="roomSelectionModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Select Room for Booking</h2>
+                <div id="roomSelectionInfo" style="margin-bottom: 20px;"></div>
+                <div class="form-group">
+                    <label for="roomSelect">Available Rooms:</label>
+                    <select id="roomSelect" style="width: 100%; padding: 10px; font-size: 16px;">
+                        <option value="">Loading rooms...</option>
+                    </select>
+                </div>
+                <div class="admin-buttons" style="margin-top: 20px;">
+                    <button type="button" id="confirmRoomBtn" class="btn">Confirm Booking</button>
+                    <button type="button" id="cancelRoomBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
         </div>
         
         <div class="bookings-list">
@@ -376,6 +521,8 @@
             setTimeout(() => {
                 initAdminPanel();
                 loadBookings();
+                loadUnconfirmedBookings();
+                checkServerStatus(); // Check server status on load/refresh
             }, 100);
         }
 
@@ -505,6 +652,204 @@
             }
         }
 
+        // Load and display unconfirmed bookings
+        async function loadUnconfirmedBookings() {
+            const unconfirmedList = document.getElementById('unconfirmedBookingsList');
+            if (!unconfirmedList) return;
+
+            try {
+                console.log('Loading unconfirmed bookings from:', `${BACKEND_URL}/admin/unconfirmed-bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Failed to load unconfirmed bookings:', response.status, errorText);
+                    unconfirmedList.innerHTML = `<div class="no-bookings">Error loading unconfirmed bookings (${response.status}).</div>`;
+                    return;
+                }
+
+                const bookings = await response.json();
+                
+                if (bookings.length === 0) {
+                    unconfirmedList.innerHTML = '<div class="no-bookings">No unconfirmed bookings</div>';
+                    return;
+                }
+
+                // Display unconfirmed bookings
+                unconfirmedList.innerHTML = bookings.map(booking => {
+                    const roomTypeText = booking.roomType === 'big' ? 'Big Room' : 'Small Room';
+                    const checkInFormatted = formatDate(booking.checkIn);
+                    const checkOutFormatted = formatDate(booking.checkOut);
+                    const dateRange = checkInFormatted === checkOutFormatted 
+                        ? checkInFormatted 
+                        : `${checkInFormatted}-${checkOutFormatted}`;
+                    
+                    return `
+                        <div class="booking-item">
+                            <div class="booking-info">
+                                <strong>${roomTypeText}</strong><br>
+                                <span class="dates">${dateRange}</span><br>
+                                <span>Guests: ${booking.guests}</span><br>
+                                <span>Phone: ${booking.phone}</span>
+                            </div>
+                            <div class="booking-actions">
+                                <button class="booking-confirm-btn" onclick="showRoomSelection('${booking.id}', '${booking.roomType}', '${booking.checkIn}', '${booking.checkOut}')">Confirm</button>
+                                <button class="booking-delete-btn" onclick="deleteUnconfirmedBooking('${booking.id}')">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading unconfirmed bookings:', error);
+                unconfirmedList.innerHTML = `<div class="no-bookings">Error loading unconfirmed bookings: ${error.message}</div>`;
+            }
+        }
+
+        // Store current booking being confirmed
+        let currentConfirmingBookingId = null;
+
+        // Show room selection modal
+        async function showRoomSelection(bookingId, roomType, checkIn, checkOut) {
+            currentConfirmingBookingId = bookingId;
+            
+            // Show booking info in modal
+            const roomTypeText = roomType === 'big' ? 'Big Room' : 'Small Room';
+            const checkInFormatted = formatDate(checkIn);
+            const checkOutFormatted = formatDate(checkOut);
+            const dateRange = checkInFormatted === checkOutFormatted 
+                ? checkInFormatted 
+                : `${checkInFormatted}-${checkOutFormatted}`;
+            
+            document.getElementById('roomSelectionInfo').innerHTML = `
+                <p><strong>${roomTypeText}</strong></p>
+                <p>Dates: ${dateRange}</p>
+            `;
+            
+            // Show modal
+            document.getElementById('roomSelectionModal').style.display = 'block';
+            
+            // Load available rooms
+            await loadAvailableRooms(roomType, checkIn, checkOut);
+        }
+
+        // Load available rooms for the booking dates
+        async function loadAvailableRooms(roomType, checkIn, checkOut) {
+            const roomSelect = document.getElementById('roomSelect');
+            roomSelect.innerHTML = '<option value="">Loading rooms...</option>';
+            
+            try {
+                const response = await fetch(
+                    `${BACKEND_URL}/admin/available-rooms?roomType=${roomType}&checkIn=${checkIn}&checkOut=${checkOut}`
+                );
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load available rooms');
+                }
+                
+                const data = await response.json();
+                
+                console.log('Available rooms response:', data);
+                console.log('Available rooms count:', data.availableRooms?.length);
+                console.log('Total rooms:', data.totalRooms);
+                console.log('Booked rooms:', data.bookedRooms);
+                
+                if (!data.availableRooms || data.availableRooms.length === 0) {
+                    roomSelect.innerHTML = '<option value="">No available rooms for these dates</option>';
+                    document.getElementById('confirmRoomBtn').disabled = true;
+                    console.warn('No available rooms found. Total rooms:', data.totalRooms, 'Booked rooms:', data.bookedRooms?.length || 0);
+                } else {
+                    roomSelect.innerHTML = '<option value="">-- Select Room --</option>' +
+                        data.availableRooms.map(roomId => {
+                            const parts = roomId.split('-');
+                            const type = parts[0].toUpperCase();
+                            const num = parts[1];
+                            return `<option value="${roomId}">${type} ROOM #${num}</option>`;
+                        }).join('');
+                    document.getElementById('confirmRoomBtn').disabled = false;
+                    console.log('Loaded', data.availableRooms.length, 'available rooms');
+                }
+            } catch (error) {
+                console.error('Error loading available rooms:', error);
+                roomSelect.innerHTML = '<option value="">Error loading rooms</option>';
+                document.getElementById('confirmRoomBtn').disabled = true;
+            }
+        }
+
+        // Confirm booking with selected room
+        async function confirmBookingWithRoom() {
+            const roomSelect = document.getElementById('roomSelect');
+            const selectedRoomId = roomSelect.value;
+            
+            if (!selectedRoomId) {
+                showAdminMessage('Please select a room', 'error');
+                return;
+            }
+            
+            if (!currentConfirmingBookingId) {
+                showAdminMessage('No booking selected', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/confirm-booking/${currentConfirmingBookingId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId: selectedRoomId })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showAdminMessage(data.message || 'Booking confirmed successfully', 'success');
+                    
+                    // Close modal
+                    document.getElementById('roomSelectionModal').style.display = 'none';
+                    currentConfirmingBookingId = null;
+                    
+                    // Refresh lists
+                    loadUnconfirmedBookings();
+                    loadBookings();
+                } else {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    showAdminMessage(errorData.error || 'Error confirming booking', 'error');
+                }
+            } catch (error) {
+                console.error('Error confirming booking:', error);
+                showAdminMessage('Error confirming booking', 'error');
+            }
+        }
+
+        // Close modal
+        function closeRoomSelectionModal() {
+            document.getElementById('roomSelectionModal').style.display = 'none';
+            currentConfirmingBookingId = null;
+        }
+
+        // Delete an unconfirmed booking
+        async function deleteUnconfirmedBooking(bookingId) {
+            if (!confirm('Are you sure you want to delete this unconfirmed booking?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/booking/${bookingId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showAdminMessage(data.message || 'Booking deleted successfully', 'success');
+                    loadUnconfirmedBookings(); // Refresh unconfirmed list
+                } else {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    showAdminMessage(errorData.error || 'Error deleting booking', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting unconfirmed booking:', error);
+                showAdminMessage('Error deleting booking', 'error');
+            }
+        }
+
         // Delete booking
         async function deleteBooking(bookingId) {
             if (!confirm('Are you sure you want to delete this booking?')) {
@@ -539,15 +884,44 @@
             if (msgEl) {
                 msgEl.textContent = text;
                 msgEl.className = `admin-message ${type}`;
+                // Keep info messages longer (5 seconds), others 3 seconds
+                const timeout = type === 'info' ? 5000 : 3000;
                 setTimeout(() => {
                     msgEl.textContent = '';
                     msgEl.className = 'admin-message';
-                }, 3000);
+                }, timeout);
             }
         }
 
         // Save unavailability
         document.addEventListener('DOMContentLoaded', function() {
+            // Modal event listeners
+            const modal = document.getElementById('roomSelectionModal');
+            const closeModal = document.querySelector('.close-modal');
+            const confirmRoomBtn = document.getElementById('confirmRoomBtn');
+            const cancelRoomBtn = document.getElementById('cancelRoomBtn');
+            
+            if (closeModal) {
+                closeModal.addEventListener('click', closeRoomSelectionModal);
+            }
+            
+            if (cancelRoomBtn) {
+                cancelRoomBtn.addEventListener('click', closeRoomSelectionModal);
+            }
+            
+            if (confirmRoomBtn) {
+                confirmRoomBtn.addEventListener('click', confirmBookingWithRoom);
+            }
+            
+            // Close modal when clicking outside
+            if (modal) {
+                window.addEventListener('click', function(event) {
+                    if (event.target === modal) {
+                        closeRoomSelectionModal();
+                    }
+                });
+            }
+            
             const saveBtn = document.getElementById('adminSaveBtn');
             
             if (saveBtn) {
@@ -618,6 +992,98 @@
                 errorMessage.textContent = 'Invalid username or password';
             }
         });
+
+        // Handle restart backend
+        const restartBtn = document.getElementById('restartBtn');
+        if (restartBtn) {
+            restartBtn.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to restart the backend server? This will temporarily disconnect all users.')) {
+                    return;
+                }
+                
+                try {
+                    showAdminMessage('Restarting backend server...', 'info');
+                    const response = await fetch(`${BACKEND_URL}/admin/restart`, {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        showAdminMessage(data.message || 'Backend restart initiated. Please wait a few seconds...', 'success');
+                        
+                        // Update status immediately to show restarting
+                        const statusEl = document.getElementById('serverStatus');
+                        const textEl = statusEl?.querySelector('.status-text');
+                        if (textEl) {
+                            textEl.textContent = 'Restarting...';
+                        }
+                        
+                        // Check status after 10 seconds
+                        setTimeout(() => {
+                            checkServerStatus();
+                        }, 10000);
+                    } else {
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                        showAdminMessage(errorData.error || 'Error restarting server', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error restarting server:', error);
+                    showAdminMessage('Error connecting to server. Server may be restarting...', 'info');
+                    
+                    // Update status immediately to show restarting
+                    const statusEl = document.getElementById('serverStatus');
+                    const textEl = statusEl?.querySelector('.status-text');
+                    if (textEl) {
+                        textEl.textContent = 'Restarting...';
+                    }
+                    
+                    // Check status after 10 seconds
+                    setTimeout(() => {
+                        checkServerStatus();
+                    }, 10000);
+                }
+            });
+        }
+        
+        // Check server status and update display
+        async function checkServerStatus() {
+            const statusEl = document.getElementById('serverStatus');
+            const indicatorEl = statusEl?.querySelector('.status-indicator');
+            const textEl = statusEl?.querySelector('.status-text');
+            
+            if (!statusEl || !indicatorEl || !textEl) return;
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/status`, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(5000)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update status display
+                    statusEl.className = 'server-status online';
+                    indicatorEl.className = 'status-indicator online';
+                    textEl.textContent = `Online • Port ${data.port} • Uptime: ${data.uptime}`;
+                    
+                    // Add tooltip with more details
+                    statusEl.title = `Server Status: Online\nPort: ${data.port}\nUptime: ${data.uptime}\nMemory: ${data.memory.used}MB / ${data.memory.total}MB\nNode: ${data.nodeVersion}\nPlatform: ${data.platform}`;
+                } else {
+                    // Server responded but with error
+                    statusEl.className = 'server-status offline';
+                    indicatorEl.className = 'status-indicator offline';
+                    textEl.textContent = 'Error';
+                    statusEl.title = 'Server returned an error';
+                }
+            } catch (error) {
+                // Server is offline or unreachable
+                statusEl.className = 'server-status offline';
+                indicatorEl.className = 'status-indicator offline';
+                textEl.textContent = 'Offline';
+                statusEl.title = 'Cannot connect to server. Make sure backend is running on port 3001.';
+            }
+        }
 
         // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {
