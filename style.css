@@ -480,6 +480,10 @@ body {
     background-color: white;
 }
 
+.form-group select option[disabled] {
+    display: none;
+}
+
 /* Flatpickr styling */
 .flatpickr-calendar {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -514,6 +518,14 @@ body {
 
 .form-group input:invalid:not(:placeholder-shown) {
     border-color: #d32f2f;
+}
+
+.form-group input:disabled,
+.form-group input[disabled] {
+    background-color: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 .checkin-checkout-info {
@@ -599,10 +611,11 @@ body {
 .menu-modal-content {
     width: 100vw;
     height: 100vh;
-    background: #f5f0e8;
+    background: #fff5e6;
     display: flex;
     flex-direction: column;
     position: relative;
+    overflow-x: hidden;
 }
 
 .menu-close-btn {
@@ -635,27 +648,29 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f5f0e8;
-    overflow: auto;
-    padding: 20px;
+    background: #fff5e6;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+    padding: 0;
+    width: 100%;
 }
 
 .menu-pdf-frame {
-    width: 100%;
-    height: 100%;
+    width: auto;
+    height: auto;
     border: none;
-    background: white;
+    background: #fff5e6;
     /* A4 aspect ratio: 210mm x 297mm = ~1.414 */
     /* Fit by height, maintain aspect ratio */
-    max-width: calc(100vh * 0.707); /* A4 width/height ratio */
-    max-height: calc(100vh - 200px); /* Leave space for controls and button */
-    min-width: 600px;
-    min-height: 848px; /* A4 height at reasonable scale */
+    max-width: 100vw !important; /* Use full viewport width */
+    max-height: calc(100vh - 150px); /* Leave space for button container */
+    display: block;
+    overflow: hidden;
 }
 
 .menu-order-btn-container {
     padding: 25px 40px;
-    background: #f5f0e8;
+    background: #fff5e6;
     text-align: center;
     flex-shrink: 0;
     z-index: 2001;

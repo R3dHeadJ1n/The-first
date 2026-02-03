@@ -228,6 +228,10 @@ async function initializeDatePickers(roomType) {
     
     if (!checkinInput || !checkoutInput || !roomType) return;
     
+    // Enable inputs before initializing Flatpickr (Flatpickr needs enabled inputs)
+    checkinInput.disabled = false;
+    checkoutInput.disabled = false;
+    
     // Fetch unavailable dates for this room type
     await fetchBookedDates(roomType);
     
@@ -329,6 +333,12 @@ function openBookingModal() {
     // Reset form
     bookingForm.reset();
     
+    // Set room type to placeholder (empty value)
+    const roomTypeSelect = document.getElementById('roomType');
+    if (roomTypeSelect) {
+        roomTypeSelect.value = '';
+    }
+    
     // Hide availability message
     document.getElementById('availabilityMessage').style.display = 'none';
     
@@ -340,6 +350,18 @@ function openBookingModal() {
     if (checkoutPicker) {
         checkoutPicker.destroy();
         checkoutPicker = null;
+    }
+    
+    // Disable date fields initially
+    const checkinInput = document.getElementById('checkin');
+    const checkoutInput = document.getElementById('checkout');
+    if (checkinInput) {
+        checkinInput.disabled = true;
+        checkinInput.value = '';
+    }
+    if (checkoutInput) {
+        checkoutInput.disabled = true;
+        checkoutInput.value = '';
     }
     
     bookingModal.classList.add('show');
@@ -398,8 +420,34 @@ function openMenuModal() {
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     
-    // Load first page - fit to height, maintain A4 aspect ratio
-    menuPdfViewer.src = `${MENU_PDF_FILE}#page=1&toolbar=0&navpanes=0&scrollbar=0&zoom=page-fit`;
+    // Load first page - use zoom to fit one page on screen
+    // Calculate zoom based on viewport to ensure one page fits without horizontal scroll
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const buttonSpace = 150; // Space for button container and padding
+    const availableHeight = viewportHeight - buttonSpace;
+    
+    // Target width that works without scrollbar (user tested: 580px works)
+    const targetWidth = 580;
+    
+    // A4 dimensions at 100% zoom: width ~794px, height ~1123px
+    // Calculate zoom based on target width
+    const widthZoom = (targetWidth / 794) * 100;
+    const heightZoom = (availableHeight / 1123) * 100;
+    
+    // Use the smaller zoom to ensure it fits both width and height
+    // Use Math.floor to ensure we don't exceed viewport
+    const zoomPercent = Math.min(75, Math.floor(Math.min(heightZoom, widthZoom)));
+    
+    // Calculate actual PDF dimensions at this zoom
+    const pdfWidth = (794 * zoomPercent) / 100;
+    const pdfHeight = (1123 * zoomPercent) / 100;
+    
+    // Set iframe size to target width to avoid horizontal scrollbar
+    menuPdfViewer.style.width = `${targetWidth}px`;
+    menuPdfViewer.style.height = `${pdfHeight}px`;
+    
+    menuPdfViewer.src = `${MENU_PDF_FILE}#page=1&toolbar=0&navpanes=0&scrollbar=0&zoom=${zoomPercent}`;
     
     // Show modal
     menuModal.classList.add('show');
@@ -657,10 +705,16 @@ if (roomTypeSelect) {
     roomTypeSelect.addEventListener('change', async function() {
         const selectedRoomType = this.value;
         const availabilityMessage = document.getElementById('availabilityMessage');
+        const checkinInput = document.getElementById('checkin');
+        const checkoutInput = document.getElementById('checkout');
         
         if (selectedRoomType) {
             // Hide availability message initially
             availabilityMessage.style.display = 'none';
+            
+            // Enable date fields
+            if (checkinInput) checkinInput.disabled = false;
+            if (checkoutInput) checkoutInput.disabled = false;
             
             // Initialize date pickers with availability for selected room type
             await initializeDatePickers(selectedRoomType);
@@ -670,6 +724,14 @@ if (roomTypeSelect) {
         } else {
             // Hide availability message if no room type selected
             availabilityMessage.style.display = 'none';
+            
+            // Disable date fields
+            if (checkinInput) checkinInput.disabled = true;
+            if (checkoutInput) checkoutInput.disabled = true;
+            
+            // Clear date values
+            if (checkinInput) checkinInput.value = '';
+            if (checkoutInput) checkoutInput.value = '';
             
             // Destroy pickers if no room type selected
             if (checkinPicker) {
