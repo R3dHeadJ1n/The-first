@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #fff5e6;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        
+        body.login-mode {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .error-message {
+            color: #d32f2f;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .admin-content {
+            display: none;
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            margin: 0 auto;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .admin-header h1 {
+            color: #333;
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .logout-btn:hover {
+            background-color: #da190b;
+        }
+
+        .admin-panel-section {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .admin-panel-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .admin-panel-section select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .admin-panel-section select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .admin-panel-section input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .admin-panel-section input[type="text"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .admin-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .admin-buttons button {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .admin-message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .admin-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .admin-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .bookings-list {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+
+        .bookings-list h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .booking-item {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .booking-info {
+            flex: 1;
+        }
+
+        .booking-info strong {
+            color: #333;
+            font-size: 16px;
+        }
+
+        .booking-info .room-name {
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .booking-info .dates {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .booking-delete-btn {
+            padding: 8px 16px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .booking-delete-btn:hover {
+            background-color: #da190b;
+        }
+
+        .no-bookings {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Form (shown when not authenticated) -->
+    <div id="loginContainer" class="login-container">
+        <h2>Admin Login</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn">Login</button>
+            <div id="errorMessage" class="error-message"></div>
+        </form>
+    </div>
+
+    <!-- Admin Content (shown when authenticated) -->
+    <div id="adminContent" class="admin-content">
+        <div class="admin-header">
+            <h1>Admin Panel</h1>
+            <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
+        
+        <div class="admin-panel-section">
+            <h2>Manage Room Availability</h2>
+            
+            <div class="form-group">
+                <label for="adminRoomSelect">Select Room:</label>
+                <select id="adminRoomSelect" required>
+                    <option value="">-- Select Room --</option>
+                    <optgroup label="Big Rooms">
+                        <option value="big-1">Big Room 1</option>
+                        <option value="big-2">Big Room 2</option>
+                        <option value="big-3">Big Room 3</option>
+                    </optgroup>
+                    <optgroup label="Small Rooms">
+                        <option value="small-1">Small Room 1</option>
+                        <option value="small-2">Small Room 2</option>
+                        <option value="small-3">Small Room 3</option>
+                        <option value="small-4">Small Room 4</option>
+                        <option value="small-5">Small Room 5</option>
+                        <option value="small-6">Small Room 6</option>
+                        <option value="small-7">Small Room 7</option>
+                        <option value="small-8">Small Room 8</option>
+                    </optgroup>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="adminCheckIn">Check-in Date:</label>
+                <input type="text" id="adminCheckIn" placeholder="Select check-in date" readonly>
+            </div>
+            
+            <div class="form-group">
+                <label for="adminCheckOut">Check-out Date:</label>
+                <input type="text" id="adminCheckOut" placeholder="Select check-out date" readonly>
+            </div>
+            
+            <div class="admin-buttons">
+                <button type="button" id="adminSaveBtn" class="btn">Mark as Unavailable</button>
+                <button type="button" id="adminRemoveBtn" class="btn btn-secondary">Remove Unavailability</button>
+            </div>
+            
+            <div id="adminMessage" class="admin-message"></div>
+        </div>
+        
+        <div class="bookings-list">
+            <h2>All Admin Bookings</h2>
+            <div id="bookingsList">
+                <div class="no-bookings">Loading bookings...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+    <script>
+        // Admin credentials
+        const ADMIN_USERNAME = 'admin';
+        const ADMIN_PASSWORD = 'admin';
+        
+        // Storage key for authentication
+        const AUTH_KEY = 'admin_authenticated';
+        const BACKEND_URL = 'http://localhost:3001';
+        
+        let adminCheckInPicker = null;
+        let adminCheckOutPicker = null;
+
+        // Check authentication status on page load
+        function checkAuth() {
+            const isAuthenticated = sessionStorage.getItem(AUTH_KEY) === 'true';
+            
+            if (isAuthenticated) {
+                showAdminContent();
+            } else {
+                showLoginForm();
+            }
+        }
+
+        function showLoginForm() {
+            document.body.classList.add('login-mode');
+            document.getElementById('loginContainer').style.display = 'block';
+            document.getElementById('adminContent').style.display = 'none';
+        }
+
+        function showAdminContent() {
+            document.body.classList.remove('login-mode');
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+            // Initialize admin panel after showing content
+            setTimeout(() => {
+                initAdminPanel();
+                loadBookings();
+            }, 100);
+        }
+
+        // Initialize admin date pickers
+        function initAdminPanel() {
+            const checkInInput = document.getElementById('adminCheckIn');
+            const checkOutInput = document.getElementById('adminCheckOut');
+            
+            if (!checkInInput || !checkOutInput) return;
+            
+            if (!adminCheckInPicker) {
+                adminCheckInPicker = flatpickr(checkInInput, {
+                    dateFormat: 'Y-m-d',
+                    minDate: 'today',
+                    enableTime: false,
+                    onChange: function(selectedDates, dateStr) {
+                        // Update check-out minimum date when check-in changes
+                        if (selectedDates.length > 0 && adminCheckOutPicker) {
+                            const nextDay = new Date(selectedDates[0]);
+                            nextDay.setDate(nextDay.getDate() + 1);
+                            adminCheckOutPicker.set('minDate', nextDay);
+                        }
+                    }
+                });
+            }
+            
+            if (!adminCheckOutPicker) {
+                adminCheckOutPicker = flatpickr(checkOutInput, {
+                    dateFormat: 'Y-m-d',
+                    minDate: 'today',
+                    enableTime: false
+                });
+            }
+        }
+
+        // Format Date object to YYYY-MM-DD string (preserves local date, no UTC conversion)
+        function formatDateForBackend(dateObj) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Format date from YYYY-MM-DD to DD.MM.YY
+        function formatDate(dateStr) {
+            // Parse date string directly to avoid timezone issues
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) {
+                // Fallback to Date object if format is unexpected
+                const date = new Date(dateStr + 'T00:00:00');
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = String(date.getFullYear()).slice(-2);
+                return `${day}.${month}.${year}`;
+            }
+            const year = parts[0].slice(-2); // Last 2 digits of year
+            const month = parts[1];
+            const day = parts[2];
+            return `${day}.${month}.${year}`;
+        }
+
+        // Format room name (big-1 -> BIG ROOM#1)
+        function formatRoomName(roomId) {
+            if (!roomId) return 'Unknown';
+            const parts = roomId.split('-');
+            const type = parts[0].toUpperCase();
+            const num = parts[1];
+            return `${type} ROOM#${num}`;
+        }
+
+        // Load and display bookings
+        async function loadBookings() {
+            const bookingsList = document.getElementById('bookingsList');
+            if (!bookingsList) return;
+
+            try {
+                console.log('Loading bookings from:', `${BACKEND_URL}/admin/bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/bookings`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Failed to load bookings:', response.status, errorText);
+                    bookingsList.innerHTML = `<div class="no-bookings">Error loading bookings (${response.status}). Check console for details.</div>`;
+                    return;
+                }
+
+                const bookings = await response.json();
+                
+                if (bookings.length === 0) {
+                    bookingsList.innerHTML = '<div class="no-bookings">No bookings found</div>';
+                    return;
+                }
+
+                // Sort bookings by check-in date, then by room
+                bookings.sort((a, b) => {
+                    if (a.checkIn !== b.checkIn) {
+                        return a.checkIn.localeCompare(b.checkIn);
+                    }
+                    return a.roomId.localeCompare(b.roomId);
+                });
+
+                // Display bookings
+                let bookingNumber = 1;
+                bookingsList.innerHTML = bookings.map(booking => {
+                    const roomName = formatRoomName(booking.roomId);
+                    const checkInFormatted = formatDate(booking.checkIn);
+                    const checkOutFormatted = formatDate(booking.checkOut);
+                    const dateRange = checkInFormatted === checkOutFormatted 
+                        ? checkInFormatted 
+                        : `${checkInFormatted}-${checkOutFormatted}`;
+                    
+                    return `
+                        <div class="booking-item">
+                            <div class="booking-info">
+                                <strong>BOOKING #${bookingNumber++}:</strong> 
+                                <span class="room-name">${roomName}</span> 
+                                <span class="dates">${dateRange}</span>
+                            </div>
+                            <button class="booking-delete-btn" onclick="deleteBooking('${booking.id}')">Delete</button>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading bookings:', error);
+                bookingsList.innerHTML = `<div class="no-bookings">Error loading bookings: ${error.message}. Make sure backend server is running on port 3001.</div>`;
+            }
+        }
+
+        // Delete booking
+        async function deleteBooking(bookingId) {
+            if (!confirm('Are you sure you want to delete this booking?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/booking/${bookingId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showAdminMessage(data.message || 'Booking deleted successfully', 'success');
+                    loadBookings();
+                } else {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    showAdminMessage(errorData.error || 'Error deleting booking', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting booking:', error);
+                showAdminMessage('Error deleting booking', 'error');
+            }
+        }
+
+        // Make deleteBooking available globally
+        window.deleteBooking = deleteBooking;
+
+        // Show admin message
+        function showAdminMessage(text, type) {
+            const msgEl = document.getElementById('adminMessage');
+            if (msgEl) {
+                msgEl.textContent = text;
+                msgEl.className = `admin-message ${type}`;
+                setTimeout(() => {
+                    msgEl.textContent = '';
+                    msgEl.className = 'admin-message';
+                }, 3000);
+            }
+        }
+
+        // Save unavailability
+        document.addEventListener('DOMContentLoaded', function() {
+            const saveBtn = document.getElementById('adminSaveBtn');
+            const removeBtn = document.getElementById('adminRemoveBtn');
+            
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    const roomId = document.getElementById('adminRoomSelect').value;
+                    const checkIn = adminCheckInPicker?.selectedDates[0];
+                    const checkOut = adminCheckOutPicker?.selectedDates[0];
+                    
+                    if (!roomId) {
+                        showAdminMessage('Please select a room', 'error');
+                        return;
+                    }
+                    
+                    if (!checkIn || !checkOut) {
+                        showAdminMessage('Please select both check-in and check-out dates', 'error');
+                        return;
+                    }
+                    
+                    if (checkOut <= checkIn) {
+                        showAdminMessage('Check-out date must be after check-in date', 'error');
+                        return;
+                    }
+                    
+                    // Format dates in local timezone to avoid UTC conversion issues
+                    const checkInStr = formatDateForBackend(checkIn);
+                    const checkOutStr = formatDateForBackend(checkOut);
+                    
+                    try {
+                        const response = await fetch(`${BACKEND_URL}/admin/book-room`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ roomId, checkIn: checkInStr, checkOut: checkOutStr })
+                        });
+                        
+                        const data = await response.json();
+                        if (data.success) {
+                            showAdminMessage(data.message || 'Room marked as unavailable', 'success');
+                            adminCheckInPicker.clear();
+                            adminCheckOutPicker.clear();
+                            loadBookings(); // Refresh bookings list
+                        } else {
+                            showAdminMessage(data.error || 'Error saving booking', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showAdminMessage('Error connecting to server. Make sure backend is running.', 'error');
+                    }
+                });
+            }
+            
+            if (removeBtn) {
+                removeBtn.addEventListener('click', async () => {
+                    const roomId = document.getElementById('adminRoomSelect').value;
+                    const checkIn = adminCheckInPicker?.selectedDates[0];
+                    const checkOut = adminCheckOutPicker?.selectedDates[0];
+                    
+                    if (!roomId) {
+                        showAdminMessage('Please select a room', 'error');
+                        return;
+                    }
+                    
+                    if (!checkIn || !checkOut) {
+                        showAdminMessage('Please select both check-in and check-out dates', 'error');
+                        return;
+                    }
+                    
+                    if (checkOut <= checkIn) {
+                        showAdminMessage('Check-out date must be after check-in date', 'error');
+                        return;
+                    }
+                    
+                    // Format dates in local timezone to avoid UTC conversion issues
+                    const checkInStr = formatDateForBackend(checkIn);
+                    const checkOutStr = formatDateForBackend(checkOut);
+                    
+                    try {
+                        const response = await fetch(`${BACKEND_URL}/admin/book-room`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ roomId, checkIn: checkInStr, checkOut: checkOutStr })
+                        });
+                        
+                        const data = await response.json();
+                        if (data.success) {
+                            showAdminMessage(data.message || 'Unavailability removed', 'success');
+                            adminCheckInPicker.clear();
+                            adminCheckOutPicker.clear();
+                            loadBookings(); // Refresh bookings list
+                        } else {
+                            showAdminMessage(data.error || 'Error removing booking', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showAdminMessage('Error connecting to server. Make sure backend is running.', 'error');
+                    }
+                });
+            }
+        });
+
+        // Handle login form submission
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('errorMessage');
+            
+            errorMessage.textContent = '';
+            
+            // Check credentials
+            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                // Store authentication in sessionStorage
+                sessionStorage.setItem(AUTH_KEY, 'true');
+                showAdminContent();
+            } else {
+                errorMessage.textContent = 'Invalid username or password';
+            }
+        });
+
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            // Clear authentication
+            sessionStorage.removeItem(AUTH_KEY);
+            if (adminCheckInPicker) {
+                adminCheckInPicker.destroy();
+                adminCheckInPicker = null;
+            }
+            if (adminCheckOutPicker) {
+                adminCheckOutPicker.destroy();
+                adminCheckOutPicker = null;
+            }
+            showLoginForm();
+            document.getElementById('loginForm').reset();
+        });
+
+        // Check auth on page load
+        checkAuth();
+    </script>
+</body>
+</html>
