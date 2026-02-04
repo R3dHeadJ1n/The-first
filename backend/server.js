@@ -9,6 +9,7 @@ const session = require('express-session');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const multer = require('multer');
 
 const app = express();
 const PORT = 3001;
@@ -52,6 +53,43 @@ function requireAuth(req, res, next) {
 
 // Excel file path for storing bookings
 const BOOKINGS_FILE = path.join(__dirname, 'bookings.xlsx');
+
+// Menu file paths
+const MENU_FILE = path.join(__dirname, 'menu.xlsx');
+const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
+const MENU_IMAGES_MAPPING_FILE = path.join(__dirname, 'menu-images.json');
+
+// Ensure menu images directory exists
+if (!fs.existsSync(MENU_IMAGES_DIR)) {
+    fs.mkdirSync(MENU_IMAGES_DIR, { recursive: true });
+}
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, MENU_IMAGES_DIR);
+    },
+    filename: function (req, file, cb) {
+        // Generate unique filename: dishId-timestamp.extension
+        const dishId = req.params.id || 'unknown';
+        const ext = path.extname(file.originalname).toLowerCase();
+        const timestamp = Date.now();
+        cb(null, `${dishId}-${timestamp}${ext}`);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    fileFilter: function (req, file, cb) {
+        // Accept only jpg and png
+        const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png'];
+        if (allowedMimes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only JPG and PNG images are allowed'), false);
+        }
+    }
+});
 
 // Excel file operations
 async function initializeExcelFile() {
@@ -376,6 +414,16 @@ app.get('/admin', (req, res) => {
 // Also support /admin.html for convenience
 app.get('/admin.html', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'admin.html'));
+});
+
+// Admin menu management page
+app.get('/admin-menu.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'admin-menu.html'));
+});
+
+// Menu page for users
+app.get('/menu.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'menu.html'));
 });
 
 // Test endpoint to verify server is running
@@ -1047,7 +1095,291 @@ app.post('/book-room', async (req, res) => {
     }
 });
 
+// ============================
+// MENU MANAGEMENT FUNCTIONS
+// ============================
+
+// Read image mappings from JSON file
+function readImageMappings() {
+    try {
+        if (fs.existsSync(MENU_IMAGES_MAPPING_FILE)) {
+            const data = fs.readFileSync(MENU_IMAGES_MAPPING_FILE, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (error) {
+        console.error('Error reading image mappings:', error);
+    }
+    return {};
+}
+
+// Save image mappings to JSON file
+function saveImageMappings(mappings) {
+    try {
+        fs.writeFileSync(MENU_IMAGES_MAPPING_FILE, JSON.stringify(mappings, null, 2));
+        return true;
+    } catch (error) {
+        console.error('Error saving image mappings:', error);
+        return false;
+    }
+}
+
+// Parse menu from Excel file
+async function parseMenuFromExcel() {
+    try {
+        if (!fs.existsSync(MENU_FILE)) {
+            console.log('Menu file not found:', MENU_FILE);
+            return [];
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(MENU_FILE);
+        
+        // Get first worksheet
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+            console.log('No worksheet found in menu file');
+            return [];
+        }
+
+        const menuItems = [];
+        const imageMappings = readImageMappings();
+        let idCounter = 1;
+
+        // Read rows (skip header row if exists)
+        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+            // Skip header row (row 1)
+            if (rowNumber === 1) return;
+
+            try {
+                // Column C (index 3) = NAME (English only)
+                // Column S (index 19) = PRICE
+                const nameCell = row.getCell(3); // Column C
+                const priceCell = row.getCell(19); // Column S
+
+                const name = nameCell.value;
+                const price = priceCell.value;
+
+                // Skip rows with empty name or price
+                if (!name || name === '' || price === null || price === undefined || price === '') {
+                    return;
+                }
+
+                // Extract English name (if there are multiple languages, take first/English part)
+                let englishName = String(name).trim();
+                // If name contains separators like "|" or "/", take first part (assuming English)
+                if (englishName.includes('|')) {
+                    englishName = englishName.split('|')[0].trim();
+                }
+                if (englishName.includes('/')) {
+                    englishName = englishName.split('/')[0].trim();
+                }
+
+                // Convert price to number
+                let priceNum = parseFloat(price);
+                if (isNaN(priceNum)) {
+                    // Try to extract number from string
+                    const priceMatch = String(price).match(/[\d.]+/);
+                    if (priceMatch) {
+                        priceNum = parseFloat(priceMatch[0]);
+                    } else {
+                        console.log(`Skipping row ${rowNumber}: Invalid price: ${price}`);
+                        return;
+                    }
+                }
+
+                const dishId = `dish-${idCounter++}`;
+                const imagePath = imageMappings[dishId] || null;
+
+                menuItems.push({
+                    id: dishId,
+                    name: englishName,
+                    price: priceNum,
+                    image: imagePath ? `/api/menu-images/${path.basename(imagePath)}` : null,
+                    rowNumber: rowNumber // Store for updating
+                });
+
+                // Store dishId -> rowNumber mapping in image mappings file
+                if (!imageMappings._rowMapping) {
+                    imageMappings._rowMapping = {};
+                }
+                imageMappings._rowMapping[dishId] = rowNumber;
+            } catch (rowError) {
+                console.error(`Error parsing row ${rowNumber}:`, rowError);
+            }
+        });
+
+        // Save row mappings
+        saveImageMappings(imageMappings);
+
+        console.log(`Parsed ${menuItems.length} menu items from Excel`);
+        return menuItems;
+    } catch (error) {
+        console.error('Error parsing menu from Excel:', error);
+        return [];
+    }
+}
+
+// Update menu item name/price in Excel
+async function updateMenuItemInExcel(dishId, newName, newPrice) {
+    try {
+        if (!fs.existsSync(MENU_FILE)) {
+            return { success: false, error: 'Menu file not found' };
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(MENU_FILE);
+        const worksheet = workbook.worksheets[0];
+        
+        if (!worksheet) {
+            return { success: false, error: 'No worksheet found' };
+        }
+
+        // Get row number from mapping
+        const imageMappings = readImageMappings();
+        const rowNumber = imageMappings._rowMapping?.[dishId];
+
+        if (!rowNumber) {
+            return { success: false, error: 'Dish row number not found. Please reload menu.' };
+        }
+
+        // Update column C (name) and column S (price)
+        const row = worksheet.getRow(rowNumber);
+        row.getCell(3).value = newName;
+        row.getCell(19).value = newPrice;
+
+        await workbook.xlsx.writeFile(MENU_FILE);
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating menu item in Excel:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// ============================
+// MENU API ENDPOINTS
+// ============================
+
+// Menu cache
+let menuCache = null;
+let menuCacheTime = 0;
+const MENU_CACHE_DURATION = 60000; // Cache for 60 seconds
+
+// Clear menu cache (call this when menu is updated)
+function clearMenuCache() {
+    menuCache = null;
+    menuCacheTime = 0;
+}
+
+// GET /api/menu - Get all menu items (with caching)
+app.get('/api/menu', async (req, res) => {
+    try {
+        const now = Date.now();
+        
+        // Return cached menu if available and not expired
+        if (menuCache && (now - menuCacheTime) < MENU_CACHE_DURATION) {
+            return res.json(menuCache);
+        }
+        
+        // Parse menu and cache it
+        const menuItems = await parseMenuFromExcel();
+        menuCache = menuItems;
+        menuCacheTime = now;
+        
+        res.json(menuItems);
+    } catch (error) {
+        console.error('Error getting menu:', error);
+        res.status(500).json({ error: 'Failed to load menu' });
+    }
+});
+
+// POST /api/menu/:id/image - Upload/update image for a dish (admin only)
+app.post('/api/menu/:id/image', (req, res, next) => {
+    // Check both session and localStorage token for cross-window auth
+    if (req.session && req.session.authenticated) {
+        return next();
+    }
+    // Allow if localStorage token exists (set by admin panel)
+    const authToken = req.headers['x-auth-token'];
+    if (authToken) {
+        // Token exists, allow request (basic check)
+        return next();
+    }
+    return res.status(401).json({ error: 'Unauthorized' });
+}, upload.single('image'), async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        const imageMappings = readImageMappings();
+        imageMappings[dishId] = req.file.path;
+        saveImageMappings(imageMappings);
+        
+        // Clear menu cache when image is updated
+        clearMenuCache();
+
+        res.json({
+            success: true,
+            imageUrl: `/api/menu-images/${req.file.filename}`
+        });
+    } catch (error) {
+        console.error('Error uploading image:', error);
+        res.status(500).json({ error: 'Failed to upload image: ' + error.message });
+    }
+});
+
+// PUT /api/menu/:id - Update dish name and price (admin only)
+app.put('/api/menu/:id', (req, res, next) => {
+    // Check both session and localStorage token for cross-window auth
+    if (req.session && req.session.authenticated) {
+        return next();
+    }
+    // Allow if localStorage token exists (set by admin panel)
+    const authToken = req.headers['x-auth-token'];
+    if (authToken) {
+        // Token exists, allow request (basic check)
+        return next();
+    }
+    return res.status(401).json({ error: 'Unauthorized' });
+}, async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        const { name, price } = req.body;
+
+        if (!name || price === undefined || price === null) {
+            return res.status(400).json({ error: 'Name and price are required' });
+        }
+
+        const priceNum = parseFloat(price);
+        if (isNaN(priceNum)) {
+            return res.status(400).json({ error: 'Invalid price' });
+        }
+
+        const result = await updateMenuItemInExcel(dishId, name, priceNum);
+        
+        if (result.success) {
+            // Clear menu cache when menu is updated
+            clearMenuCache();
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (error) {
+        console.error('Error updating menu item:', error);
+        res.status(500).json({ error: 'Failed to update menu item' });
+    }
+});
+
+// Serve menu images statically
+app.use('/api/menu-images', express.static(MENU_IMAGES_DIR));
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Backend server running on http://localhost:${PORT}`);
+    // Parse menu on startup
+    parseMenuFromExcel().then(items => {
+        console.log(`Menu loaded: ${items.length} items`);
+    });
 });
