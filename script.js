@@ -122,6 +122,13 @@ function t(key) {
 
 function applyTranslations(lang) {
     currentLang = lang;
+    
+    // Save selected language to localStorage
+    try {
+        localStorage.setItem('selectedLanguage', lang);
+    } catch (e) {
+        console.log('Could not save language preference:', e);
+    }
 
     // Text nodes
     document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -188,12 +195,99 @@ const bookingModal = document.getElementById('bookingModal');
 const successModal = document.getElementById('successModal');
 const bookingForm = document.getElementById('bookingForm');
 const modalClose = document.querySelector('.modal-close');
+const bookRoomBtn = document.getElementById('bookRoomBtn');
+const toastContainer = document.getElementById('toastContainer');
+
+// ----------------------------
+// Toast notifications (survive refresh)
+// ----------------------------
+const LAST_TOAST_KEY = 'lastToastNotification';
+
+function showToast(message, type = 'success', options = {}) {
+    const container = toastContainer || document.getElementById('toastContainer');
+    if (!container) {
+        // Fallback if container is missing for any reason
+        alert(message);
+        return;
+    }
+
+    const toast = document.createElement('div');
+    const toastTypeClass =
+        type === 'error' ? 'toast-error' :
+        type === 'info' ? 'toast-info' :
+        'toast-success';
+
+    toast.className = `toast ${toastTypeClass}`;
+
+    const text = document.createElement('div');
+    text.textContent = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '×';
+
+    closeBtn.addEventListener('click', () => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 200);
+    });
+
+    toast.appendChild(text);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    // animate in
+    requestAnimationFrame(() => toast.classList.add('show'));
+
+    const durationMs = typeof options.durationMs === 'number' ? options.durationMs : 5000;
+    if (durationMs > 0) {
+        setTimeout(() => {
+            if (toast.isConnected) {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 250);
+            }
+        }, durationMs);
+    }
+}
+
+function persistToastForRefresh(message, type = 'success') {
+    try {
+        localStorage.setItem(LAST_TOAST_KEY, JSON.stringify({
+            message,
+            type,
+            ts: Date.now()
+        }));
+    } catch (e) {
+        // ignore
+    }
+}
+
+function showPersistedToastIfAny() {
+    try {
+        const raw = localStorage.getItem(LAST_TOAST_KEY);
+        if (!raw) return;
+        const payload = JSON.parse(raw);
+        // only show if it was within the last 15 seconds
+        if (payload && payload.ts && (Date.now() - payload.ts) < 15000 && payload.message) {
+            showToast(payload.message, payload.type || 'success', { durationMs: 6000 });
+        }
+        localStorage.removeItem(LAST_TOAST_KEY);
+    } catch (e) {
+        // ignore
+    }
+}
 
 // Ensure form doesn't submit normally - set onsubmit handler immediately
 if (bookingForm) {
+    // Remove any existing action attribute
+    bookingForm.removeAttribute('action');
+    bookingForm.setAttribute('novalidate', 'novalidate');
+    
     bookingForm.onsubmit = function(e) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         return false;
     };
     console.log('✅ Form onsubmit handler set to prevent default');
@@ -406,7 +500,6 @@ function openSuccessModal() {
     // Close booking modal first
     if (bookingModal) {
         bookingModal.classList.remove('show');
-        bookingModal.style.display = 'none';
     }
     
     // Small delay to ensure booking modal is closed before showing success
@@ -414,19 +507,7 @@ function openSuccessModal() {
         // Store opening time BEFORE showing (prevents immediate close)
         modal.dataset.openedTime = Date.now().toString();
         
-        // Show the modal - use inline styles to ensure it's visible
-        modal.style.display = 'flex';
-        modal.style.alignItems = 'center';
-        modal.style.justifyContent = 'center';
-        modal.style.position = 'fixed';
-        modal.style.top = '0';
-        modal.style.left = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-        modal.style.zIndex = '10000';
-        modal.style.visibility = 'visible';
-        modal.style.opacity = '1';
+        // Show the modal using CSS class (avoid sticky inline styles)
         modal.classList.add('show');
         
         document.body.style.overflow = 'hidden';
@@ -440,8 +521,19 @@ function openSuccessModal() {
 
 // Close success modal
 function closeSuccessModal() {
-    successModal.classList.remove('show');
-    bookingModal.classList.remove('show');
+    const modal = successModal || document.getElementById('successModal');
+    if (modal) {
+        modal.classList.remove('show');
+        // Ensure any old inline styles from previous versions don't keep it visible
+        modal.style.display = '';
+        modal.style.visibility = '';
+        modal.style.opacity = '';
+        modal.style.zIndex = '';
+    }
+    if (bookingModal) {
+        bookingModal.classList.remove('show');
+        bookingModal.style.display = '';
+    }
     document.body.style.overflow = '';
     // Reset form
     bookingForm.reset();
@@ -544,6 +636,9 @@ function openWhatsAppOrder() {
 
 // Initialize menu modal event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // If the page refreshed after a booking, show the persisted toast
+    showPersistedToastIfAny();
+
     // Close button
     const closeBtn = document.getElementById('menuCloseBtn');
     if (closeBtn) {
@@ -629,11 +724,13 @@ async function sendBookingToBackend(checkin, checkout, roomType, guests, phone) 
 // Form validation and submission
 let isSubmitting = false; // Prevent double submission
 
-bookingForm.addEventListener('submit', function(event) {
+function handleBookingSubmit(event) {
     // CRITICAL: Always prevent default form submission
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+    }
     
     console.log('📋 Form submit event triggered');
     
@@ -643,8 +740,8 @@ bookingForm.addEventListener('submit', function(event) {
         return false;
     }
     
-    // Get submit button
-    const submitButton = bookingForm.querySelector('button[type="submit"]');
+    // Get submit button (we use type="button" to avoid native form submit refresh)
+    const submitButton = bookRoomBtn || (bookingForm && bookingForm.querySelector('button[type="submit"]'));
     if (!submitButton) {
         console.log('❌ Submit button not found');
         return false;
@@ -728,6 +825,12 @@ bookingForm.addEventListener('submit', function(event) {
             if (result && result.success) {
                 console.log('✅ Booking successful! result.success =', result.success);
                 console.log('🎯 About to call openSuccessModal()...');
+                
+                // Always show a toast (and persist it in case the page refreshes)
+                const successMsg = t('success_message');
+                persistToastForRefresh(successMsg, 'success');
+                showToast(successMsg, 'success', { durationMs: 7000 });
+
                 // Show success modal (it will close booking modal internally)
                 openSuccessModal();
                 console.log('✅ openSuccessModal() called');
@@ -736,7 +839,8 @@ bookingForm.addEventListener('submit', function(event) {
                 // Show error message
                 const errorMsg = result?.error || 'Failed to submit booking. Please try again.';
                 console.log('Showing error alert:', errorMsg);
-                alert(errorMsg);
+                persistToastForRefresh(errorMsg, 'error');
+                showToast(errorMsg, 'error', { durationMs: 8000 });
             }
         })
         .catch(error => {
@@ -750,34 +854,61 @@ bookingForm.addEventListener('submit', function(event) {
             submitButton.style.cursor = 'pointer';
             
             console.log('❌ Unexpected error:', error);
-            alert('An unexpected error occurred. Please try again.');
+            const msg = 'An unexpected error occurred. Please try again.';
+            persistToastForRefresh(msg, 'error');
+            showToast(msg, 'error', { durationMs: 8000 });
         });
     
     // CRITICAL: Always return false to prevent form submission
     console.log('📋 Returning false to prevent form submission');
     return false;
-});
+}
+
+if (bookingForm) {
+    // Use capture to intercept any submission early
+    bookingForm.addEventListener('submit', handleBookingSubmit, { capture: true });
+}
+if (bookRoomBtn) {
+    // Button is type="button" (no native submit), so this fully prevents page refresh
+    bookRoomBtn.addEventListener('click', handleBookingSubmit, { capture: true });
+}
 
 // Prevent form submission on Enter key in input fields (except submit button)
-const formInputs = bookingForm.querySelectorAll('input, select');
-formInputs.forEach(function(input) {
-    input.addEventListener('keypress', function(event) {
-        if (event.key === 'Enter' && input.type !== 'submit') {
-            event.preventDefault();
-            // Move to next field or submit
-            const inputs = Array.from(formInputs);
-            const currentIndex = inputs.indexOf(input);
-            if (currentIndex < inputs.length - 1) {
-                inputs[currentIndex + 1].focus();
-            } else {
-                bookingForm.querySelector('button[type="submit"]').click();
+if (bookingForm) {
+    const formInputs = bookingForm.querySelectorAll('input, select');
+    formInputs.forEach(function(input) {
+        input.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && input.type !== 'submit') {
+                event.preventDefault();
+                // Move to next field or submit
+                const inputs = Array.from(formInputs);
+                const currentIndex = inputs.indexOf(input);
+                if (currentIndex < inputs.length - 1) {
+                    inputs[currentIndex + 1].focus();
+                } else if (bookRoomBtn) {
+                    bookRoomBtn.click();
+                }
             }
-        }
+        });
     });
-});
+}
 
-// Default language (ENG)
-applyTranslations('en');
+// Load saved language preference or default to English
+function initializeLanguage() {
+    let savedLang = 'en';
+    try {
+        const saved = localStorage.getItem('selectedLanguage');
+        if (saved === 'en' || saved === 'ru') {
+            savedLang = saved;
+        }
+    } catch (e) {
+        console.log('Could not load language preference:', e);
+    }
+    applyTranslations(savedLang);
+}
+
+// Initialize language on page load
+initializeLanguage();
 
 // Room type change handler
 const roomTypeSelect = document.getElementById('roomType');

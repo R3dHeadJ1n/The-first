@@ -23,7 +23,7 @@
         <div class="modal-content">
             <span class="modal-close">&times;</span>
             <h2 data-i18n="booking_title">Book a Room</h2>
-            <form id="bookingForm" onsubmit="return false;">
+            <form id="bookingForm" onsubmit="return false;" novalidate>
 
                 <div class="form-group">
                     <label for="roomType" data-i18n="roomtype_label">Room Type</label>
@@ -66,7 +66,7 @@
                     <p class="checkin-checkout-info" data-i18n="checkin_checkout_info">Check-in after 2:00 PM; Check-out before 12:00 PM</p>
                 </div>
                 
-                <button type="submit" class="btn btn-room btn-submit" data-i18n="book_submit">Book a Room</button>
+                <button type="button" id="bookRoomBtn" class="btn btn-room btn-submit" data-i18n="book_submit">Book a Room</button>
             </form>
         </div>
     </div>
@@ -167,5 +167,8 @@
     <!-- Flatpickr JS -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
     <script src="script.js"></script>
+    
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>
