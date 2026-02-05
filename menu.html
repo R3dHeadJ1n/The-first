@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Our Menu</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Prevent auto-reload -->
+    <script>
+        // IMMEDIATE: Block any reload attempts before page loads
+        (function() {
+            'use strict';
+            const BLOCK_KEY = '__MENU_PAGE_BLOCK_RELOAD__';
+            if (window[BLOCK_KEY]) {
+                console.error('RELOAD BLOCKED: Page already loaded');
+                document.write('<h1 style="color:red;padding:50px;">Reload loop detected. Please close this tab.</h1>');
+                throw new Error('Reload blocked');
+            }
+            window[BLOCK_KEY] = true;
+        })();
+    </script>
+    <style>
+        body {
+            background-color: #fff5e6;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* Loading overlay */
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #fff5e6;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+        }
+        
+        #loadingOverlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #991305;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 18px;
+            color: #991305;
+            font-weight: 600;
+        }
+        
+        /* Hide content until ready */
+        .menu-page-container {
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+        
+        .menu-page-container.ready {
+            opacity: 1;
+        }
+        
+        .menu-page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        
+        .menu-page-header h1 {
+            color: #991305;
+            font-size: 32px;
+            margin: 0;
+        }
+        
+        /* Shopping cart icon in header */
+        .cart-icon-container {
+            position: relative;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        
+        .cart-icon-container:hover {
+            background-color: #f5f5f5;
+            transform: scale(1.1);
+        }
+        
+        .cart-icon {
+            width: 32px;
+            height: 32px;
+            fill: #991305;
+        }
+        
+        .cart-badge {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: #ff4444;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid white;
+            transform: scale(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .cart-badge.show {
+            transform: scale(1);
+        }
+        
+        .cart-badge.animate {
+            animation: bounce 0.5s ease;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+        
+        /* Add to cart animation */
+        @keyframes addToCart {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        
+        .cart-icon-container.just-added {
+            animation: addToCart 0.5s ease;
+        }
+        
+        /* Menu item quantity controls */
+        .menu-item-quantity-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .menu-item-qty-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #991305;
+            background: white;
+            color: #991305;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .menu-item-qty-btn:hover {
+            background: #991305;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .menu-item-qty-display {
+            min-width: 50px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 600;
+            color: #991305;
+        }
+        
+        /* Cart Modal */
+        .cart-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .cart-modal.show {
+            display: flex;
+            opacity: 1;
+        }
+        
+        .cart-modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .cart-modal.show .cart-modal-content {
+            transform: scale(1);
+        }
+        
+        .cart-modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .cart-modal-header h2 {
+            margin: 0;
+            color: #991305;
+            font-size: 24px;
+        }
+        
+        .cart-modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+        
+        .cart-modal-close:hover {
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .cart-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .cart-modal-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .cart-modal-item:last-child {
+            border-bottom: none;
+        }
+        
+        .cart-modal-item-info {
+            flex: 1;
+        }
+        
+        .cart-modal-item-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .cart-modal-item-price {
+            font-size: 14px;
+            color: #991305;
+            font-weight: 600;
+        }
+        
+        .cart-modal-item-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 0 15px;
+        }
+        
+        .cart-modal-btn-minus,
+        .cart-modal-btn-plus {
+            width: 35px;
+            height: 35px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .cart-modal-btn-minus:hover,
+        .cart-modal-btn-plus:hover {
+            background: #f5f5f5;
+        }
+        
+        .cart-modal-item-quantity {
+            min-width: 40px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .cart-modal-item-total {
+            font-weight: 600;
+            color: #991305;
+            min-width: 100px;
+            text-align: right;
+            font-size: 16px;
+        }
+        
+        .cart-modal-footer {
+            padding: 20px;
+            border-top: 2px solid #eee;
+            background: #f9f9f9;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        .cart-modal-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #991305;
+        }
+        
+        .cart-modal-order-btn {
+            padding: 15px;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background-color: #991305;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .cart-modal-order-btn:hover {
+            background-color: #7a0f04;
+        }
+        
+        .cart-modal-actions {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+        
+        .cart-modal-clear-btn {
+            flex: 1;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            background: transparent;
+            color: #991305;
+            border: 2px solid #991305;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        
+        .cart-modal-clear-btn:hover {
+            background-color: #991305;
+            color: white;
+        }
+        
+        .cart-modal-order-btn {
+            flex: 1;
+        }
+        
+        .cart-modal-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+        
+        .back-btn {
+            padding: 10px 20px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .back-btn:hover {
+            background-color: #5a6268;
+        }
+        
+        .menu-page-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* Floating order button */
+        .floating-order-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 18px 40px;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            background-color: #991305;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            pointer-events: none;
+        }
+        
+        .floating-order-btn.show {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .floating-order-btn:hover {
+            background-color: #7a0f04;
+            transform: translateY(0) scale(1.05);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" data-i18n="loading_menu">Loading menu...</div>
+    </div>
+    
+    <div class="menu-page-container">
+        <div class="menu-page-header">
+            <h1 data-i18n="menu_title">Our Menu</h1>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <!-- Shopping Cart Icon -->
+                <div class="cart-icon-container" id="cartIconContainer" title="View Cart">
+                    <svg class="cart-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12L8.1 13h7.45c.75 0 1.41-.41 1.75-1.03L21.7 4H5.21l-.94-2H1zm16 16c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    </svg>
+                    <span class="cart-badge" id="cartBadge">0</span>
+                </div>
+                <a href="index.html" class="back-btn" data-i18n="back_to_home">← Back to Home</a>
+            </div>
+        </div>
+        
+        <!-- Menu Grid -->
+        <div id="menuGrid" class="menu-grid">
+            <div class="loading" data-i18n="loading_menu">Loading menu...</div>
+        </div>
+    </div>
+    
+    <!-- Floating View Cart Button -->
+    <button class="floating-order-btn" id="floatingOrderBtn" data-i18n="view_cart">VIEW CART</button>
+    
+    <!-- Cart Modal -->
+    <div class="cart-modal" id="cartModal">
+        <div class="cart-modal-content">
+            <div class="cart-modal-header">
+                <h2 data-i18n="your_cart">Your Cart</h2>
+                <button class="cart-modal-close" id="cartModalClose">&times;</button>
+            </div>
+            <div class="cart-modal-body" id="cartModalBody">
+                <!-- Cart items will be inserted here -->
+            </div>
+            <div class="cart-modal-footer" id="cartModalFooter" style="display: none;">
+                <div class="cart-modal-total">
+                    <span data-i18n="cart_total">Total:</span>
+                    <span id="cartModalTotal">0.00 THB</span>
+                </div>
+                <div class="cart-modal-actions">
+                    <button class="cart-modal-clear-btn" id="cartModalClearBtn" data-i18n="clear_cart">Clear Cart</button>
+                    <button class="cart-modal-order-btn" id="cartModalOrderBtn" data-i18n="order_food_whatsapp">ORDER FOOD</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Backend API Configuration
+        const BACKEND_URL = 'http://localhost:3001';
+        
+        // Clean up any old sessionStorage on page load
+        try {
+            // Clear old reload prevention data that might interfere
+            const oldTimestamp = sessionStorage.getItem('menuPageLoadTime');
+            if (oldTimestamp) {
+                const timeSinceLastLoad = Date.now() - parseInt(oldTimestamp);
+                // Only clear if it's been more than 5 seconds (normal navigation)
+                if (timeSinceLastLoad > 5000) {
+                    sessionStorage.removeItem('menuPageLoaded');
+                    sessionStorage.removeItem('menuPageLoadTime');
+                    sessionStorage.removeItem('menuReloadCount');
+                }
+            }
+        } catch (e) {
+            // Ignore errors
+        }
+        
+        // Language support (simplified)
+        const translations = {
+            en: {
+                menu_title: 'Our Menu',
+                back_to_home: '← Back to Home',
+                your_cart: 'Your Cart',
+                cart_total: 'Total:',
+                currency: 'THB',
+                loading_menu: 'Loading menu...',
+                order_food_whatsapp: 'ORDER FOOD',
+                add_to_cart: 'Add to Cart',
+                view_cart: 'VIEW CART',
+                clear_cart: 'Clear Cart'
+            },
+            ru: {
+                menu_title: 'Наше меню',
+                back_to_home: '← Назад',
+                your_cart: 'Ваша корзина',
+                cart_total: 'Итого:',
+                currency: 'THB',
+                loading_menu: 'Загрузка меню...',
+                order_food_whatsapp: 'ЗАКАЗАТЬ ЕДУ',
+                add_to_cart: 'Добавить в корзину',
+                view_cart: 'КОРЗИНА',
+                clear_cart: 'Очистить корзину'
+            }
+        };
+        
+        let currentLang = 'en';
+        
+        // Load saved language
+        try {
+            const saved = localStorage.getItem('selectedLanguage');
+            if (saved === 'en' || saved === 'ru') {
+                currentLang = saved;
+            }
+        } catch (e) {}
+        
+        function t(key) {
+            return (translations[currentLang] && translations[currentLang][key]) ? translations[currentLang][key] : key;
+        }
+        
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach((el) => {
+                const key = el.getAttribute('data-i18n');
+                el.textContent = t(key);
+            });
+        }
+        
+        // Cart management
+        const CART_STORAGE_KEY = 'foodCart';
+        
+        function getCart() {
+            try {
+                const cartJson = localStorage.getItem(CART_STORAGE_KEY);
+                return cartJson ? JSON.parse(cartJson) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+        
+        function saveCart(cart) {
+            try {
+                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+            } catch (e) {
+                console.error('Error saving cart:', e);
+            }
+        }
+        
+        function addToCart(dishId, dishName, dishPrice) {
+            try {
+                const cart = getCart();
+                if (cart[dishId]) {
+                    cart[dishId].quantity += 1;
+                } else {
+                    cart[dishId] = {
+                        name: dishName,
+                        price: dishPrice,
+                        quantity: 1
+                    };
+                }
+                saveCart(cart);
+                
+                // Animate cart icon
+                const cartIconContainer = document.getElementById('cartIconContainer');
+                if (cartIconContainer) {
+                    cartIconContainer.classList.add('just-added');
+                    setTimeout(() => {
+                        cartIconContainer.classList.remove('just-added');
+                    }, 500);
+                }
+                
+                // Update the menu item display
+                updateMenuItemDisplay(dishId);
+                
+                updateCartDisplay();
+            } catch (e) {
+                console.error('Error adding to cart:', e);
+            }
+        }
+        
+        function clearCart() {
+            try {
+                localStorage.removeItem(CART_STORAGE_KEY);
+                updateCartDisplay();
+                closeCartModal();
+            } catch (e) {
+                console.error('Error clearing cart:', e);
+            }
+        }
+        
+        function removeFromCart(dishId) {
+            try {
+                const cart = getCart();
+                if (cart[dishId]) {
+                    cart[dishId].quantity -= 1;
+                    if (cart[dishId].quantity <= 0) {
+                        delete cart[dishId];
+                    }
+                    saveCart(cart);
+                    
+                    // Update the menu item display
+                    updateMenuItemDisplay(dishId);
+                    
+                    updateCartDisplay();
+                }
+            } catch (e) {
+                console.error('Error removing from cart:', e);
+            }
+        }
+        
+        function getCartTotal() {
+            const cart = getCart();
+            let total = 0;
+            for (const dishId in cart) {
+                total += cart[dishId].price * cart[dishId].quantity;
+            }
+            return total;
+        }
+        
+        function updateCartDisplay() {
+            try {
+                const cart = getCart();
+                const cartBadge = document.getElementById('cartBadge');
+                const floatingOrderBtn = document.getElementById('floatingOrderBtn');
+                const cartModal = document.getElementById('cartModal');
+                
+                // Calculate total item count (sum of all quantities)
+                let totalItems = 0;
+                for (const dishId in cart) {
+                    const item = cart[dishId];
+                    if (item && item.quantity) {
+                        totalItems += item.quantity;
+                    }
+                }
+                
+                // Update cart badge
+                if (cartBadge) {
+                    if (totalItems > 0) {
+                        cartBadge.textContent = totalItems > 99 ? '99+' : totalItems;
+                        cartBadge.classList.add('show');
+                        // Animate badge
+                        cartBadge.classList.add('animate');
+                        setTimeout(() => {
+                            cartBadge.classList.remove('animate');
+                        }, 500);
+                    } else {
+                        cartBadge.textContent = '0';
+                        cartBadge.classList.remove('show');
+                    }
+                }
+                
+                // Show/hide floating order button (only if cart modal is not open)
+                if (floatingOrderBtn) {
+                    const isCartModalOpen = cartModal && cartModal.classList.contains('show');
+                    if (totalItems > 0 && !isCartModalOpen) {
+                        floatingOrderBtn.classList.add('show');
+                    } else {
+                        floatingOrderBtn.classList.remove('show');
+                    }
+                }
+                
+                // Update cart modal if it's open
+                if (cartModal && cartModal.classList.contains('show')) {
+                    updateCartModal();
+                }
+                
+                // Update all menu item displays to reflect cart changes
+                updateAllMenuItems();
+            } catch (e) {
+                console.error('Error updating cart display:', e);
+            }
+        }
+        
+        function updateCartModal() {
+            const cart = getCart();
+            const cartModalBody = document.getElementById('cartModalBody');
+            const cartModalFooter = document.getElementById('cartModalFooter');
+            const cartModalTotal = document.getElementById('cartModalTotal');
+            
+            if (!cartModalBody || !cartModalFooter) return;
+            
+            const itemCount = Object.keys(cart).length;
+            
+            if (itemCount === 0) {
+                cartModalBody.innerHTML = '<div class="cart-modal-empty">Your cart is empty</div>';
+                cartModalFooter.style.display = 'none';
+                return;
+            }
+            
+            cartModalFooter.style.display = 'block';
+            
+            let html = '';
+            let total = 0;
+            
+            for (const dishId in cart) {
+                const item = cart[dishId];
+                if (!item || !item.name || typeof item.price !== 'number') {
+                    continue;
+                }
+                
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                
+                const escapedName = escapeHtml(item.name);
+                const escapedId = escapeHtml(dishId);
+                const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                html += `
+                    <div class="cart-modal-item">
+                        <div class="cart-modal-item-info">
+                            <div class="cart-modal-item-name">${escapedName}</div>
+                            <div class="cart-modal-item-price">${item.price.toFixed(2)} THB each</div>
+                        </div>
+                        <div class="cart-modal-item-controls">
+                            <button onclick="window.removeFromCart('${escapedId}')" class="cart-modal-btn-minus">-</button>
+                            <span class="cart-modal-item-quantity">${item.quantity}</span>
+                            <button onclick="window.addToCart('${escapedId}', '${escapedNameForOnclick}', ${item.price})" class="cart-modal-btn-plus">+</button>
+                        </div>
+                        <div class="cart-modal-item-total">${itemTotal.toFixed(2)} THB</div>
+                    </div>
+                `;
+            }
+            
+            cartModalBody.innerHTML = html;
+            if (cartModalTotal) {
+                cartModalTotal.textContent = total.toFixed(2) + ' THB';
+            }
+        }
+        
+        // Function to update all menu item displays (when cart changes from modal)
+        function updateAllMenuItems() {
+            const cart = getCart();
+            for (const dishId in cart) {
+                updateMenuItemDisplay(dishId);
+            }
+            // Also update items that might have been removed
+            menuItems.forEach(item => {
+                const dishId = String(item.id);
+                if (!cart[dishId]) {
+                    updateMenuItemDisplay(dishId);
+                }
+            });
+        }
+        
+        function openCartModal() {
+            const cartModal = document.getElementById('cartModal');
+            const floatingOrderBtn = document.getElementById('floatingOrderBtn');
+            
+            if (cartModal) {
+                updateCartModal();
+                cartModal.classList.add('show');
+                // Hide floating button when modal is open
+                if (floatingOrderBtn) {
+                    floatingOrderBtn.classList.remove('show');
+                }
+                // Prevent body scroll
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        
+        function closeCartModal() {
+            const cartModal = document.getElementById('cartModal');
+            
+            if (cartModal) {
+                cartModal.classList.remove('show');
+                // Show floating button again if cart has items
+                updateCartDisplay();
+                // Restore body scroll
+                document.body.style.overflow = '';
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load menu from backend
+        let menuItems = [];
+        let loadMenuPromise = null; // Prevent duplicate requests
+        
+        async function loadMenu() {
+            const menuGrid = document.getElementById('menuGrid');
+            if (!menuGrid) return;
+            
+            // If already loading, return the existing promise
+            if (loadMenuPromise) {
+                console.log('Menu already loading, reusing promise');
+                return loadMenuPromise;
+            }
+            
+            // Create loading promise
+            loadMenuPromise = (async () => {
+                try {
+                    menuGrid.innerHTML = '<div class="loading">Loading menu...</div>';
+                    
+                    console.log('Fetching menu from:', `${BACKEND_URL}/api/menu`);
+                    const response = await fetchWithTimeout(`${BACKEND_URL}/api/menu`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    }, 8000); // 8 second timeout
+                
+                console.log('Response status:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error Response:', errorText);
+                    throw new Error(`Failed to load menu: ${response.status} ${response.statusText}`);
+                }
+                
+                menuItems = await response.json();
+                console.log('Menu items loaded:', menuItems.length);
+                
+                if (!Array.isArray(menuItems) || menuItems.length === 0) {
+                    console.warn('Menu items is empty or not an array');
+                    menuGrid.innerHTML = '<div class="loading">No menu items available</div>';
+                    return;
+                }
+                
+                renderMenu();
+                
+                // Wait a bit for images to start loading
+                await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (error) {
+                console.error('Error loading menu:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    backendUrl: BACKEND_URL
+                });
+                
+                // Show detailed error message
+                let errorMsg = 'Error loading menu. ';
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMsg += 'Cannot connect to backend server. Make sure the backend is running on port 3001.';
+                } else {
+                    errorMsg += error.message;
+                }
+                
+                    menuGrid.innerHTML = `<div class="loading" style="color: #991305;">${errorMsg}</div>`;
+                    throw error; // Re-throw so initializePage can handle it
+                } finally {
+                    // Clear the promise so we can retry if needed
+                    loadMenuPromise = null;
+                }
+            })();
+            
+            return loadMenuPromise;
+        }
+        
+        function renderMenu() {
+            try {
+                const menuGrid = document.getElementById('menuGrid');
+                if (!menuGrid) return;
+                
+                if (menuItems.length === 0) {
+                    menuGrid.innerHTML = '<div class="loading">No menu items available</div>';
+                    return;
+                }
+                
+                const cart = getCart();
+                
+                menuGrid.innerHTML = menuItems.map(item => {
+                    if (!item || !item.id || !item.name || typeof item.price !== 'number') {
+                        return ''; // Skip invalid items
+                    }
+                    const escapedName = escapeHtml(item.name);
+                    const escapedId = escapeHtml(String(item.id));
+                    const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    
+                    // Check if item is in cart
+                    const cartItem = cart[escapedId];
+                    const quantity = cartItem ? cartItem.quantity : 0;
+                    
+                    // Render quantity controls or add button
+                    let buttonHtml = '';
+                    if (quantity > 0) {
+                        buttonHtml = `
+                            <div class="menu-item-quantity-controls" data-item-id="${escapedId}">
+                                <button class="menu-item-qty-btn" onclick="window.removeFromCart('${escapedId}')">-</button>
+                                <span class="menu-item-qty-display">${quantity}</span>
+                                <button class="menu-item-qty-btn" onclick="window.addToCart('${escapedId}', '${escapedNameForOnclick}', ${item.price})">+</button>
+                            </div>
+                        `;
+                    } else {
+                        buttonHtml = `
+                            <button class="btn btn-food menu-add-btn" onclick="window.addToCart('${escapedId}', '${escapedNameForOnclick}', ${item.price})">${t('add_to_cart')}</button>
+                        `;
+                    }
+                    
+                    return `
+                        <div class="menu-item-card" data-item-id="${escapedId}">
+                            <div class="menu-item-image">
+                                ${item.image 
+                                    ? `<img src="${BACKEND_URL}${item.image}" alt="${escapedName}" onerror="this.parentElement.innerHTML='No Image'">`
+                                    : '<div>No Image</div>'}
+                            </div>
+                            <div class="menu-item-info">
+                                <h3 class="menu-item-name">${escapedName}</h3>
+                                <p class="menu-item-price">${item.price.toFixed(2)} THB</p>
+                                ${buttonHtml}
+                            </div>
+                        </div>
+                    `;
+                }).filter(html => html).join('');
+            } catch (e) {
+                console.error('Error rendering menu:', e);
+                const menuGrid = document.getElementById('menuGrid');
+                if (menuGrid) {
+                    menuGrid.innerHTML = '<div class="loading">Error displaying menu. Please refresh the page.</div>';
+                }
+            }
+        }
+        
+        function updateMenuItemDisplay(dishId) {
+            // Find the menu item card and update its button/controls
+            const menuItemCard = document.querySelector(`.menu-item-card[data-item-id="${dishId}"]`);
+            if (!menuItemCard) return;
+            
+            const cart = getCart();
+            const cartItem = cart[dishId];
+            const quantity = cartItem ? cartItem.quantity : 0;
+            
+            const menuItemInfo = menuItemCard.querySelector('.menu-item-info');
+            if (!menuItemInfo) return;
+            
+            // Find the button or controls container
+            const existingControls = menuItemInfo.querySelector('.menu-item-quantity-controls');
+            const existingButton = menuItemInfo.querySelector('.menu-add-btn');
+            
+            // Get item data from menuItems array
+            const menuItem = menuItems.find(item => String(item.id) === dishId);
+            if (!menuItem) return;
+            
+            const escapedName = escapeHtml(menuItem.name);
+            const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            
+            // Remove existing button/controls
+            if (existingControls) {
+                existingControls.remove();
+            }
+            if (existingButton) {
+                existingButton.remove();
+            }
+            
+            // Add new button or controls based on quantity
+            if (quantity > 0) {
+                const controlsHtml = `
+                    <div class="menu-item-quantity-controls" data-item-id="${dishId}">
+                        <button class="menu-item-qty-btn" onclick="window.removeFromCart('${dishId}')">-</button>
+                        <span class="menu-item-qty-display">${quantity}</span>
+                        <button class="menu-item-qty-btn" onclick="window.addToCart('${dishId}', '${escapedNameForOnclick}', ${menuItem.price})">+</button>
+                    </div>
+                `;
+                menuItemInfo.insertAdjacentHTML('beforeend', controlsHtml);
+            } else {
+                const buttonHtml = `
+                    <button class="btn btn-food menu-add-btn" onclick="window.addToCart('${dishId}', '${escapedNameForOnclick}', ${menuItem.price})">${t('add_to_cart')}</button>
+                `;
+                menuItemInfo.insertAdjacentHTML('beforeend', buttonHtml);
+            }
+        }
+        
+        // WhatsApp integration with cart
+        async function openWhatsAppOrder() {
+            const cart = getCart();
+            const itemCount = Object.keys(cart).length;
+            
+            if (itemCount === 0) {
+                const warningMsg = currentLang === 'ru' 
+                    ? 'Ваша корзина пуста. Пожалуйста, добавьте блюда в корзину.'
+                    : 'Your cart is empty. Please add items to your cart.';
+                alert(warningMsg);
+                return;
+            }
+            
+            // Send order to backend for Telegram notification
+            const items = [];
+            for (const dishId in cart) {
+                const item = cart[dishId];
+                items.push({ name: item.name, quantity: item.quantity, price: item.price });
+            }
+            try {
+                await fetch(`${BACKEND_URL}/api/order-food`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+            } catch (e) {
+                console.error('Failed to send order to Telegram:', e);
+            }
+            
+            const whatsappNumber = '66957084335';
+            
+            // Build order message
+            let messageText = currentLang === 'ru'
+                ? 'Здравствуйте! Я хотел бы заказать:\n'
+                : 'Hello! I would like to order:\n';
+            
+            let total = 0;
+            for (const dishId in cart) {
+                const item = cart[dishId];
+                messageText += ` - ${item.name} x${item.quantity}\n`;
+                total += item.price * item.quantity;
+            }
+            
+            messageText += currentLang === 'ru'
+                ? `\nИтого: ${total.toFixed(2)} THB`
+                : `\nTotal: ${total.toFixed(2)} THB`;
+            
+            const message = encodeURIComponent(messageText);
+            const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
+            window.open(whatsappUrl, '_blank');
+            
+            // Clear cart after order
+            localStorage.removeItem(CART_STORAGE_KEY);
+            updateCartDisplay();
+        }
+        
+        // Make functions globally available
+        window.addToCart = addToCart;
+        window.removeFromCart = removeFromCart;
+        window.clearCart = clearCart;
+        
+        // Fetch with timeout
+        async function fetchWithTimeout(url, options = {}, timeout = 5000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timeout - backend server may not be running');
+                }
+                throw error;
+            }
+        }
+        
+        // Initialize page smoothly with loading overlay
+        let initialized = false;
+        
+        async function initializePage() {
+            if (initialized) {
+                return;
+            }
+            initialized = true;
+            
+            try {
+                console.log('Initializing menu page...');
+                
+                // Apply translations first
+                applyTranslations();
+                
+                // Load menu directly (it will handle errors with timeout)
+                await loadMenu();
+                
+                // Update cart display
+                updateCartDisplay();
+                
+                // Setup floating view cart button
+                const floatingOrderBtn = document.getElementById('floatingOrderBtn');
+                if (floatingOrderBtn) {
+                    floatingOrderBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openCartModal();
+                    });
+                }
+                
+                // Setup cart icon click to open modal
+                const cartIconContainer = document.getElementById('cartIconContainer');
+                if (cartIconContainer) {
+                    cartIconContainer.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openCartModal();
+                    });
+                }
+                
+                // Setup cart modal close button
+                const cartModalClose = document.getElementById('cartModalClose');
+                if (cartModalClose) {
+                    cartModalClose.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeCartModal();
+                    });
+                }
+                
+                // Close cart modal when clicking outside
+                const cartModal = document.getElementById('cartModal');
+                if (cartModal) {
+                    cartModal.addEventListener('click', function(e) {
+                        if (e.target === cartModal) {
+                            closeCartModal();
+                        }
+                    });
+                }
+                
+                // Setup order button in cart modal
+                const cartModalOrderBtn = document.getElementById('cartModalOrderBtn');
+                if (cartModalOrderBtn) {
+                    cartModalOrderBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeCartModal();
+                        openWhatsAppOrder();
+                    });
+                }
+                
+                // Setup clear cart button in cart modal
+                const cartModalClearBtn = document.getElementById('cartModalClearBtn');
+                if (cartModalClearBtn) {
+                    cartModalClearBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        clearCart();
+                    });
+                }
+                
+                // Wait a bit for any remaining rendering
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Hide loading overlay and show content
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                const container = document.querySelector('.menu-page-container');
+                
+                if (loadingOverlay) {
+                    loadingOverlay.classList.add('hidden');
+                }
+                if (container) {
+                    container.classList.add('ready');
+                }
+                
+                // Remove overlay from DOM after animation
+                setTimeout(() => {
+                    if (loadingOverlay && loadingOverlay.parentNode) {
+                        loadingOverlay.remove();
+                    }
+                }, 500);
+                
+                console.log('Menu page initialized successfully');
+                return true;
+            } catch (e) {
+                console.error('Error initializing menu page:', e);
+                console.error('Error stack:', e.stack);
+                
+                // Reset initialized flag so we can retry
+                initialized = false;
+                
+                // Show detailed error in loading overlay
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                if (loadingOverlay) {
+                    let errorMessage = 'Error loading menu';
+                    if (e.message) {
+                        if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('timeout')) {
+                            errorMessage = 'Cannot connect to backend server.<br>Make sure the backend is running on port 3001.';
+                        } else {
+                            errorMessage = e.message;
+                        }
+                    }
+                    
+                    loadingOverlay.innerHTML = `
+                        <div style="text-align: center; color: #991305; padding: 20px;">
+                            <h2 style="margin-bottom: 10px;">${errorMessage}</h2>
+                            <p style="font-size: 14px; margin-top: 10px;">Backend URL: ${BACKEND_URL}</p>
+                            <p style="font-size: 14px; margin-top: 10px;">
+                                <button onclick="location.reload()" style="padding: 10px 20px; background: #991305; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-right: 10px;">
+                                    Retry
+                                </button>
+                                <button onclick="window.location.href='index.html'" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+                                    Back to Home
+                                </button>
+                            </p>
+                        </div>
+                    `;
+                }
+                throw e; // Re-throw so caller knows it failed
+            }
+        }
+        
+        // Ensure loading overlay is visible immediately
+        window.addEventListener('load', function() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'flex';
+            }
+        });
+        
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('DOMContentLoaded - starting initialization');
+                initializePage().catch(err => {
+                    console.error('Failed to initialize page:', err);
+                });
+            });
+        } else {
+            // DOM already loaded
+            console.log('DOM already loaded - starting initialization');
+            initializePage().catch(err => {
+                console.error('Failed to initialize page:', err);
+            });
+        }
+    </script>
+</body>
+</html>

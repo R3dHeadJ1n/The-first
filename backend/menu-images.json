@@ -3,7 +3,6 @@
     "dish-1": 2,
     "dish-2": 3,
     "dish-3": 4,
-    "dish-4": 5,
     "dish-5": 6,
     "dish-6": 7,
     "dish-7": 8,
@@ -264,10 +263,11 @@
     "dish-262": 263,
     "dish-263": 264,
     "dish-264": 265,
-    "dish-265": 266,
-    "dish-266": 267,
-    "dish-267": 268,
-    "dish-268": 269
+    "dish-265": 265,
+    "dish-266": 265,
+    "dish-267": 265,
+    "dish-268": 265,
+    "dish-4": 5
   },
   "dish-1": "C:\\Users\\user\\projects\\The-first\\backend\\uploads\\menu\\dish-1-1770195277868.jpg",
   "dish-2": "C:\\Users\\user\\projects\\The-first\\backend\\uploads\\menu\\dish-2-1770195632956.jpg",

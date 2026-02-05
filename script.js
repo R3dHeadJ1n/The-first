@@ -66,8 +66,8 @@ const translations = {
         // Scroll and rooms
         scroll_text: 'Прокрутите вниз, чтобы посмотреть номера',
         rooms_title: 'Наши номера',
-        room_type_single: 'однокомнатный номер',
-        room_type_double: 'двухкомнатный номер',
+        room_type_single: 'Однокомнатный номер',
+        room_type_double: 'Двухкомнатный номер',
         
         // Menu
         menu_title: 'Наше меню',
@@ -278,19 +278,12 @@ function showPersistedToastIfAny() {
     }
 }
 
-// Ensure form doesn't submit normally - set onsubmit handler immediately
+// Prevent default form submission
 if (bookingForm) {
-    // Remove any existing action attribute
-    bookingForm.removeAttribute('action');
-    bookingForm.setAttribute('novalidate', 'novalidate');
-    
     bookingForm.onsubmit = function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
         return false;
     };
-    console.log('✅ Form onsubmit handler set to prevent default');
 }
 
 // Flatpickr instances
@@ -563,113 +556,9 @@ if (modalClose) {
     modalClose.addEventListener('click', closeBookingModal);
 }
 
-// ----------------------------
-// Food Menu Modal - Clean Rebuild
-// ----------------------------
-const MENU_PDF_FILE = 'menu.pdf';
-
-// Open menu modal
-function openMenuModal() {
-    const menuModal = document.getElementById('menuModal');
-    const menuPdfViewer = document.getElementById('menuPdfViewer');
-    
-    if (!menuModal || !menuPdfViewer) return;
-    
-    // Disable body scroll
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    
-    // Load first page - use zoom to fit one page on screen
-    // Calculate zoom based on viewport to ensure one page fits without horizontal scroll
-    const viewportHeight = window.innerHeight;
-    const viewportWidth = window.innerWidth;
-    const buttonSpace = 150; // Space for button container and padding
-    const availableHeight = viewportHeight - buttonSpace;
-    
-    // Target width that works without scrollbar (user tested: 580px works)
-    const targetWidth = 580;
-    
-    // A4 dimensions at 100% zoom: width ~794px, height ~1123px
-    // Calculate zoom based on target width
-    const widthZoom = (targetWidth / 794) * 100;
-    const heightZoom = (availableHeight / 1123) * 100;
-    
-    // Use the smaller zoom to ensure it fits both width and height
-    // Use Math.floor to ensure we don't exceed viewport
-    const zoomPercent = Math.min(75, Math.floor(Math.min(heightZoom, widthZoom)));
-    
-    // Calculate actual PDF dimensions at this zoom
-    const pdfWidth = (794 * zoomPercent) / 100;
-    const pdfHeight = (1123 * zoomPercent) / 100;
-    
-    // Set iframe size to target width to avoid horizontal scrollbar
-    menuPdfViewer.style.width = `${targetWidth}px`;
-    menuPdfViewer.style.height = `${pdfHeight}px`;
-    
-    menuPdfViewer.src = `${MENU_PDF_FILE}#page=1&toolbar=0&navpanes=0&scrollbar=0&zoom=${zoomPercent}`;
-    
-    // Show modal
-    menuModal.classList.add('show');
-}
-
-// Close menu modal
-function closeMenuModal() {
-    const menuModal = document.getElementById('menuModal');
-    if (menuModal) {
-        menuModal.classList.remove('show');
-        document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
-    }
-}
-
-
-// WhatsApp integration - ONLY called from green button
-function openWhatsAppOrder() {
-    const whatsappNumber = '66957084335';
-    const messageText = currentLang === 'ru' 
-        ? 'Здравствуйте! Я хотел бы заказать еду из вашего меню.'
-        : 'Hello! I would like to order food from your menu.';
-    const message = encodeURIComponent(messageText);
-    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
-    window.open(whatsappUrl, '_blank');
-}
-
-// Initialize menu modal event listeners
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // If the page refreshed after a booking, show the persisted toast
     showPersistedToastIfAny();
-
-    // Close button
-    const closeBtn = document.getElementById('menuCloseBtn');
-    if (closeBtn) {
-        closeBtn.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeMenuModal();
-        };
-    }
-    
-    // Order button - ONLY this opens WhatsApp
-    const orderBtn = document.getElementById('menuOrderBtn');
-    if (orderBtn) {
-        orderBtn.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            openWhatsAppOrder();
-        };
-    }
-    
-    // Prevent clicks on PDF container from doing anything
-    const pdfContainer = document.querySelector('.menu-pdf-container');
-    if (pdfContainer) {
-        pdfContainer.onclick = function(e) {
-            // Only prevent if clicking on the container itself, not buttons
-            if (e.target === pdfContainer || e.target.closest('iframe')) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        };
-    }
 });
 
 // Send booking to backend
@@ -725,25 +614,16 @@ async function sendBookingToBackend(checkin, checkout, roomType, guests, phone) 
 let isSubmitting = false; // Prevent double submission
 
 function handleBookingSubmit(event) {
-    // CRITICAL: Always prevent default form submission
     if (event) {
         event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
     }
     
-    console.log('📋 Form submit event triggered');
-    
-    // Prevent double submission
     if (isSubmitting) {
-        console.log('⚠️ Submission already in progress, ignoring duplicate click');
         return false;
     }
     
-    // Get submit button (we use type="button" to avoid native form submit refresh)
     const submitButton = bookRoomBtn || (bookingForm && bookingForm.querySelector('button[type="submit"]'));
     if (!submitButton) {
-        console.log('❌ Submit button not found');
         return false;
     }
     
@@ -809,11 +689,8 @@ function handleBookingSubmit(event) {
     submitButton.style.opacity = '0.6';
     submitButton.style.cursor = 'not-allowed';
     
-    // Send booking to backend
-    console.log('📝 Form submitted, calling sendBookingToBackend...');
     sendBookingToBackend(checkin, checkout, roomType, guests, phone)
         .then(result => {
-            console.log('📥 Received result from sendBookingToBackend:', result);
             
             // Re-enable button
             isSubmitting = false;
@@ -823,74 +700,36 @@ function handleBookingSubmit(event) {
             submitButton.style.cursor = 'pointer';
             
             if (result && result.success) {
-                console.log('✅ Booking successful! result.success =', result.success);
-                console.log('🎯 About to call openSuccessModal()...');
-                
-                // Always show a toast (and persist it in case the page refreshes)
                 const successMsg = t('success_message');
                 persistToastForRefresh(successMsg, 'success');
                 showToast(successMsg, 'success', { durationMs: 7000 });
 
                 // Show success modal (it will close booking modal internally)
                 openSuccessModal();
-                console.log('✅ openSuccessModal() called');
             } else {
-                console.log('❌ Booking failed. result:', result);
-                // Show error message
                 const errorMsg = result?.error || 'Failed to submit booking. Please try again.';
-                console.log('Showing error alert:', errorMsg);
                 persistToastForRefresh(errorMsg, 'error');
                 showToast(errorMsg, 'error', { durationMs: 8000 });
             }
         })
         .catch(error => {
-            console.error('💥 Promise rejection in booking form:', error);
-            console.error('Error details:', error.message, error.stack);
-            // Re-enable button on error
+            console.error('Error submitting booking:', error);
             isSubmitting = false;
             submitButton.disabled = false;
             submitButton.textContent = originalText;
             submitButton.style.opacity = '1';
             submitButton.style.cursor = 'pointer';
             
-            console.log('❌ Unexpected error:', error);
             const msg = 'An unexpected error occurred. Please try again.';
             persistToastForRefresh(msg, 'error');
             showToast(msg, 'error', { durationMs: 8000 });
         });
     
-    // CRITICAL: Always return false to prevent form submission
-    console.log('📋 Returning false to prevent form submission');
     return false;
 }
 
-if (bookingForm) {
-    // Use capture to intercept any submission early
-    bookingForm.addEventListener('submit', handleBookingSubmit, { capture: true });
-}
 if (bookRoomBtn) {
-    // Button is type="button" (no native submit), so this fully prevents page refresh
-    bookRoomBtn.addEventListener('click', handleBookingSubmit, { capture: true });
-}
-
-// Prevent form submission on Enter key in input fields (except submit button)
-if (bookingForm) {
-    const formInputs = bookingForm.querySelectorAll('input, select');
-    formInputs.forEach(function(input) {
-        input.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && input.type !== 'submit') {
-                event.preventDefault();
-                // Move to next field or submit
-                const inputs = Array.from(formInputs);
-                const currentIndex = inputs.indexOf(input);
-                if (currentIndex < inputs.length - 1) {
-                    inputs[currentIndex + 1].focus();
-                } else if (bookRoomBtn) {
-                    bookRoomBtn.click();
-                }
-            }
-        });
-    });
+    bookRoomBtn.addEventListener('click', handleBookingSubmit);
 }
 
 // Load saved language preference or default to English
@@ -961,9 +800,10 @@ if (roomTypeSelect) {
 // Rooms Section & Gallery
 // ----------------------------
 let currentRoomType = 'single';
-const maxImages = 10; // Maximum number of images to try loading
-let currentImageList = []; // Store all loaded image sources for navigation
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'JPG']; // Try png, then jpg/JPG (single1.JPG, single3.JPG exist)
+let currentImageList = []; // Store all loaded image sources for navigation (active room type only)
 let currentImageIndex = 0; // Current image index in lightbox
+let roomGalleryInitialized = false;
 
 function scrollToRooms() {
     const roomsSection = document.getElementById('roomsSection');
@@ -972,90 +812,102 @@ function scrollToRooms() {
     }
 }
 
-function loadRoomImages(roomType) {
+function initRoomGallery() {
     const gallery = document.getElementById('roomGallery');
-    if (!gallery) return;
+    if (!gallery || roomGalleryInitialized) return;
+    roomGalleryInitialized = true;
     
-    gallery.innerHTML = ''; // Clear existing images
-    currentImageList = []; // Reset image list
+    gallery.innerHTML = '';
     
-    let loadedCount = 0;
-    
-    // Try to load images (single1.jpg/png, single2.jpg/png, etc. or double1.jpg/png, double2.jpg/png, etc.)
-    for (let i = 1; i <= maxImages; i++) {
-        const img = document.createElement('div');
-        img.className = 'room-gallery-item';
-        
-        const imageElement = document.createElement('img');
-        // Try .png first, then .jpg as fallback
-        const extensions = ['png', 'jpg'];
-        let currentExtensionIndex = 0;
-        let finalImageSrc = '';
-        
-        function tryLoadImage() {
-            if (currentExtensionIndex < extensions.length) {
-                finalImageSrc = `${roomType}${i}.${extensions[currentExtensionIndex]}`;
-                imageElement.src = finalImageSrc;
-                imageElement.alt = `${roomType} room ${i}`;
-            }
-        }
-        
-        imageElement.onload = function() {
-            loadedCount++;
-            // Add to image list for navigation
-            if (finalImageSrc && !currentImageList.includes(finalImageSrc)) {
-                currentImageList.push(finalImageSrc);
-            }
-            
-            // Make image clickable to open in full size (after it loads)
-            img.style.cursor = 'pointer';
-            img.onclick = function() {
-                const imageIndex = currentImageList.indexOf(finalImageSrc);
-                openImageLightbox(finalImageSrc, imageIndex);
+    for (let i = 1; i <= 3; i++) {
+        const singleItem = document.createElement('div');
+        singleItem.className = 'room-gallery-item';
+        singleItem.dataset.roomType = 'single';
+        singleItem.style.display = currentRoomType === 'single' ? '' : 'none';
+        const singleImg = document.createElement('img');
+        let singleExtIdx = 0;
+        function trySingle() {
+            const ext = IMAGE_EXTENSIONS[singleExtIdx];
+            const src = `single${i}.${ext}`;
+            singleImg.src = src;
+            singleImg.alt = `single room ${i}`;
+            singleImg.onload = () => {
+                singleItem.style.cursor = 'pointer';
+                singleItem.onclick = () => updateCurrentImageListAndOpen(src);
             };
-        };
+            singleImg.onerror = () => {
+                singleExtIdx++;
+                if (singleExtIdx < IMAGE_EXTENSIONS.length) trySingle();
+                else singleItem.remove();
+            };
+        }
+        trySingle();
+        singleItem.appendChild(singleImg);
+        gallery.appendChild(singleItem);
         
-        imageElement.onerror = function() {
-            // Try next extension
-            currentExtensionIndex++;
-            if (currentExtensionIndex < extensions.length) {
-                tryLoadImage();
-            } else {
-                // If both extensions fail, remove this item
-                img.remove();
-            }
-        };
-        
-        tryLoadImage();
-        img.appendChild(imageElement);
-        gallery.appendChild(img);
+        const doubleItem = document.createElement('div');
+        doubleItem.className = 'room-gallery-item';
+        doubleItem.dataset.roomType = 'double';
+        doubleItem.style.display = currentRoomType === 'double' ? '' : 'none';
+        const doubleImg = document.createElement('img');
+        let doubleExtIdx = 0;
+        function tryDouble() {
+            const ext = IMAGE_EXTENSIONS[doubleExtIdx];
+            const src = `double${i}.${ext}`;
+            doubleImg.src = src;
+            doubleImg.alt = `double room ${i}`;
+            doubleImg.onload = () => {
+                doubleItem.style.cursor = 'pointer';
+                doubleItem.onclick = () => updateCurrentImageListAndOpen(src);
+            };
+            doubleImg.onerror = () => {
+                doubleExtIdx++;
+                if (doubleExtIdx < IMAGE_EXTENSIONS.length) tryDouble();
+                else doubleItem.remove();
+            };
+        }
+        tryDouble();
+        doubleItem.appendChild(doubleImg);
+        gallery.appendChild(doubleItem);
     }
+    updateCurrentImageList();
+}
+
+function updateCurrentImageListAndOpen(src) {
+    updateCurrentImageList();
+    openImageLightbox(src, currentImageList.indexOf(src));
+}
+
+function updateCurrentImageList() {
+    currentImageList = [];
+    document.querySelectorAll(`#roomGallery .room-gallery-item[data-room-type="${currentRoomType}"] img`).forEach(img => {
+        if (img.src) {
+            const src = img.src.split('/').pop();
+            currentImageList.push(src);
+        }
+    });
 }
 
 function setActiveRoomType(roomType) {
     currentRoomType = roomType;
-    
-    // Update button states
     document.querySelectorAll('.room-type-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-room-type') === roomType);
     });
-    
-    // Load images for selected room type
-    loadRoomImages(roomType);
+    document.querySelectorAll('#roomGallery .room-gallery-item').forEach(item => {
+        item.style.display = item.dataset.roomType === roomType ? '' : 'none';
+    });
+    updateCurrentImageList();
 }
 
-// Room type selector event listeners
+if (document.getElementById('roomGallery')) {
+    initRoomGallery();
+}
+
 document.querySelectorAll('.room-type-btn').forEach(btn => {
     btn.addEventListener('click', function() {
-        const roomType = this.getAttribute('data-room-type');
-        setActiveRoomType(roomType);
+        setActiveRoomType(this.getAttribute('data-room-type'));
     });
 });
-
-// Initialize with single room images
-if (document.getElementById('roomGallery')) {
-    loadRoomImages('single');
-}
 
 // Image Lightbox functions
 function openImageLightbox(imageSrc, imageIndex = -1) {

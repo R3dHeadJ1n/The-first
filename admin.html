@@ -216,9 +216,16 @@
             margin-top: 20px;
         }
 
+        .bookings-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
         .bookings-list h2 {
             color: #333;
-            margin-bottom: 20px;
+            margin: 0;
         }
 
         .booking-item {
@@ -281,6 +288,22 @@
         }
 
         .booking-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .unconfirmed-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .unconfirmed-section-header h2 {
+            margin: 0;
+        }
+
+        .unconfirmed-header-buttons {
             display: flex;
             gap: 10px;
         }
@@ -401,6 +424,7 @@
                     <span class="status-indicator" style="width: 10px; height: 10px; border-radius: 50%; background-color: #ccc; display: inline-block;"></span>
                     <span class="status-text">Checking...</span>
                 </div>
+                <button class="btn" id="menuBtn" style="background-color: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">MENU</button>
                 <button class="restart-btn" id="restartBtn" style="background-color: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Restart Backend</button>
                 <button class="logout-btn" id="logoutBtn">Logout</button>
             </div>
@@ -449,7 +473,13 @@
         </div>
         
         <div class="admin-panel-section">
-            <h2>Unconfirmed Bookings</h2>
+            <div class="unconfirmed-section-header">
+                <h2>Unconfirmed Bookings</h2>
+                <div class="unconfirmed-header-buttons" id="unconfirmedBulkButtons" style="display: none;">
+                    <button type="button" class="booking-confirm-btn" onclick="confirmAllUnconfirmedBookings()">Confirm All</button>
+                    <button type="button" class="booking-delete-btn" onclick="deleteAllUnconfirmedBookings()">Delete All</button>
+                </div>
+            </div>
             <div id="unconfirmedBookingsList">
                 <div class="no-bookings">Loading unconfirmed bookings...</div>
             </div>
@@ -475,7 +505,10 @@
         </div>
         
         <div class="bookings-list">
-            <h2>All Admin Bookings</h2>
+            <div class="bookings-list-header">
+                <h2>All Admin Bookings</h2>
+                <button type="button" id="deleteAllAdminBtn" class="booking-delete-btn" onclick="deleteAllAdminBookings()" style="display: none;">Delete All</button>
+            </div>
             <div id="bookingsList">
                 <div class="no-bookings">Loading bookings...</div>
             </div>
@@ -606,6 +639,8 @@
                     const errorText = await response.text();
                     console.error('Failed to load bookings:', response.status, errorText);
                     bookingsList.innerHTML = `<div class="no-bookings">Error loading bookings (${response.status}). Check console for details.</div>`;
+                    const deleteAllBtn = document.getElementById('deleteAllAdminBtn');
+                    if (deleteAllBtn) deleteAllBtn.style.display = 'none';
                     return;
                 }
 
@@ -613,8 +648,13 @@
                 
                 if (bookings.length === 0) {
                     bookingsList.innerHTML = '<div class="no-bookings">No bookings found</div>';
+                    const deleteAllBtn = document.getElementById('deleteAllAdminBtn');
+                    if (deleteAllBtn) deleteAllBtn.style.display = 'none';
                     return;
                 }
+
+                const deleteAllBtn = document.getElementById('deleteAllAdminBtn');
+                if (deleteAllBtn) deleteAllBtn.style.display = 'inline-block';
 
                 // Sort bookings by check-in date, then by room
                 bookings.sort((a, b) => {
@@ -649,6 +689,8 @@
             } catch (error) {
                 console.error('Error loading bookings:', error);
                 bookingsList.innerHTML = `<div class="no-bookings">Error loading bookings: ${error.message}. Make sure backend server is running on port 3001.</div>`;
+                const deleteAllBtn = document.getElementById('deleteAllAdminBtn');
+                if (deleteAllBtn) deleteAllBtn.style.display = 'none';
             }
         }
 
@@ -665,6 +707,8 @@
                     const errorText = await response.text();
                     console.error('Failed to load unconfirmed bookings:', response.status, errorText);
                     unconfirmedList.innerHTML = `<div class="no-bookings">Error loading unconfirmed bookings (${response.status}).</div>`;
+                    const bulkBtns = document.getElementById('unconfirmedBulkButtons');
+                    if (bulkBtns) bulkBtns.style.display = 'none';
                     return;
                 }
 
@@ -672,8 +716,11 @@
                 
                 if (bookings.length === 0) {
                     unconfirmedList.innerHTML = '<div class="no-bookings">No unconfirmed bookings</div>';
+                    document.getElementById('unconfirmedBulkButtons').style.display = 'none';
                     return;
                 }
+
+                document.getElementById('unconfirmedBulkButtons').style.display = 'flex';
 
                 // Display unconfirmed bookings
                 unconfirmedList.innerHTML = bookings.map(booking => {
@@ -703,6 +750,8 @@
             } catch (error) {
                 console.error('Error loading unconfirmed bookings:', error);
                 unconfirmedList.innerHTML = `<div class="no-bookings">Error loading unconfirmed bookings: ${error.message}</div>`;
+                const bulkBtns = document.getElementById('unconfirmedBulkButtons');
+                if (bulkBtns) bulkBtns.style.display = 'none';
             }
         }
 
@@ -825,6 +874,78 @@
             currentConfirmingBookingId = null;
         }
 
+        // Confirm all unconfirmed bookings (auto-assign first available room)
+        async function confirmAllUnconfirmedBookings() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`);
+                if (!response.ok) throw new Error('Failed to load bookings');
+                const bookings = await response.json();
+                if (bookings.length === 0) {
+                    showAdminMessage('No unconfirmed bookings to confirm', 'error');
+                    return;
+                }
+                if (!confirm(`Confirm all ${bookings.length} unconfirmed booking(s)? Each will be assigned the first available room.`)) return;
+
+                let confirmed = 0;
+                let failed = 0;
+                for (const booking of bookings) {
+                    try {
+                        const roomsResp = await fetch(
+                            `${BACKEND_URL}/admin/available-rooms?roomType=${booking.roomType}&checkIn=${booking.checkIn}&checkOut=${booking.checkOut}`
+                        );
+                        if (!roomsResp.ok) throw new Error('No rooms');
+                        const data = await roomsResp.json();
+                        const roomId = data.availableRooms?.[0];
+                        if (!roomId) {
+                            failed++;
+                            continue;
+                        }
+                        const confirmResp = await fetch(`${BACKEND_URL}/admin/confirm-booking/${booking.id}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ roomId })
+                        });
+                        if (confirmResp.ok) confirmed++;
+                        else failed++;
+                    } catch (e) {
+                        failed++;
+                    }
+                }
+                showAdminMessage(`Confirmed ${confirmed} booking(s)${failed > 0 ? `, ${failed} failed (no room available)` : ''}`, confirmed > 0 ? 'success' : 'error');
+                loadUnconfirmedBookings();
+                loadBookings();
+            } catch (error) {
+                console.error('Error confirming all:', error);
+                showAdminMessage('Error confirming bookings', 'error');
+            }
+        }
+
+        // Delete all unconfirmed bookings
+        async function deleteAllUnconfirmedBookings() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`);
+                if (!response.ok) throw new Error('Failed to load bookings');
+                const bookings = await response.json();
+                if (bookings.length === 0) {
+                    showAdminMessage('No unconfirmed bookings to delete', 'error');
+                    return;
+                }
+                if (!confirm(`Delete all ${bookings.length} unconfirmed booking(s)?`)) return;
+
+                let deleted = 0;
+                for (const booking of bookings) {
+                    const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE' });
+                    if (delResp.ok) deleted++;
+                }
+                showAdminMessage(`Deleted ${deleted} booking(s)`, 'success');
+                loadUnconfirmedBookings();
+                loadBookings();
+            } catch (error) {
+                console.error('Error deleting all:', error);
+                showAdminMessage('Error deleting bookings', 'error');
+            }
+        }
+
         // Delete an unconfirmed booking
         async function deleteUnconfirmedBooking(bookingId) {
             if (!confirm('Are you sure you want to delete this unconfirmed booking?')) {
@@ -847,6 +968,32 @@
             } catch (error) {
                 console.error('Error deleting unconfirmed booking:', error);
                 showAdminMessage('Error deleting booking', 'error');
+            }
+        }
+
+        // Delete all admin bookings
+        async function deleteAllAdminBookings() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/admin/bookings`);
+                if (!response.ok) throw new Error('Failed to load bookings');
+                const bookings = await response.json();
+                if (bookings.length === 0) {
+                    showAdminMessage('No bookings to delete', 'error');
+                    return;
+                }
+                if (!confirm(`Delete all ${bookings.length} booking(s)?`)) return;
+
+                let deleted = 0;
+                for (const booking of bookings) {
+                    const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE' });
+                    if (delResp.ok) deleted++;
+                }
+                showAdminMessage(`Deleted ${deleted} booking(s)`, 'success');
+                loadBookings();
+                loadUnconfirmedBookings();
+            } catch (error) {
+                console.error('Error deleting all:', error);
+                showAdminMessage('Error deleting bookings', 'error');
             }
         }
 
@@ -987,6 +1134,8 @@
             if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
                 // Store authentication in sessionStorage
                 sessionStorage.setItem(AUTH_KEY, 'true');
+                // Also store in localStorage for cross-window sharing (temporary token)
+                localStorage.setItem('admin_auth_token', Date.now().toString());
                 showAdminContent();
             } else {
                 errorMessage.textContent = 'Invalid username or password';
@@ -1085,10 +1234,24 @@
             }
         }
 
+        // Handle menu button - open menu management in new window
+        const menuBtn = document.getElementById('menuBtn');
+        if (menuBtn) {
+            menuBtn.addEventListener('click', () => {
+                // Open in new tab - session cookies should be shared if same origin
+                const menuWindow = window.open(`${BACKEND_URL}/admin-menu.html`, '_blank');
+                // If window fails to open (popup blocked), fallback to same window
+                if (!menuWindow || menuWindow.closed || typeof menuWindow.closed === 'undefined') {
+                    window.location.href = `${BACKEND_URL}/admin-menu.html`;
+                }
+            });
+        }
+
         // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {
             // Clear authentication
             sessionStorage.removeItem(AUTH_KEY);
+            localStorage.removeItem('admin_auth_token'); // Clear cross-window token
             if (adminCheckInPicker) {
                 adminCheckInPicker.destroy();
                 adminCheckInPicker = null;

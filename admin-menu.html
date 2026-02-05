@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #fff5e6;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            margin-top: 5px;
+        }
+
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .menu-item-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .menu-item-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            background-color: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+
+        .menu-item-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .menu-item-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .image-upload {
+            margin-top: 10px;
+        }
+
+        .image-upload input[type="file"] {
+            display: none;
+        }
+
+        .image-upload-label {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #2196F3;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .image-upload-label:hover {
+            background-color: #1976D2;
+        }
+
+        .save-btn {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Menu Management</h1>
+        <button class="btn btn-secondary" onclick="window.close()">Close</button>
+    </div>
+
+    <div id="message" class="message" style="display: none;"></div>
+
+    <div id="menuContainer">
+        <div class="loading">Loading menu...</div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:3001';
+        let menuItems = [];
+
+        // Check authentication
+        async function checkAuth() {
+            try {
+                // First check localStorage token (for cross-window auth)
+                const authToken = localStorage.getItem('admin_auth_token');
+                if (!authToken) {
+                    alert('Please login to admin panel first');
+                    window.location.href = `${BACKEND_URL}/admin.html`;
+                    return false;
+                }
+                
+                // Then verify with backend
+                const response = await fetch(`${BACKEND_URL}/admin/check-auth`, {
+                    method: 'GET',
+                    credentials: 'include', // Important: include cookies
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.error('Auth check response not OK:', response.status);
+                    // If backend check fails but we have token, still allow (token is temporary)
+                    // This handles cases where session cookie isn't shared but localStorage is
+                    return true;
+                }
+                
+                const data = await response.json();
+                if (!data.authenticated && !authToken) {
+                    alert('Please login to admin panel first');
+                    window.location.href = `${BACKEND_URL}/admin.html`;
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                // If we have localStorage token, allow access even if backend check fails
+                const authToken = localStorage.getItem('admin_auth_token');
+                if (authToken) {
+                    console.log('Using localStorage auth token as fallback');
+                    return true;
+                }
+                alert('Cannot connect to server. Make sure backend is running.');
+                return false;
+            }
+        }
+
+        // Show message
+        function showMessage(text, type) {
+            const msgEl = document.getElementById('message');
+            msgEl.textContent = text;
+            msgEl.className = `message ${type}`;
+            msgEl.style.display = 'block';
+            setTimeout(() => {
+                msgEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // Load menu items
+        async function loadMenu() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/menu`);
+                if (!response.ok) {
+                    throw new Error('Failed to load menu');
+                }
+                menuItems = await response.json();
+                renderMenu();
+            } catch (error) {
+                console.error('Error loading menu:', error);
+                document.getElementById('menuContainer').innerHTML = 
+                    '<div class="loading">Error loading menu. Make sure backend is running.</div>';
+            }
+        }
+
+        // Render menu items
+        function renderMenu() {
+            const container = document.getElementById('menuContainer');
+            if (menuItems.length === 0) {
+                container.innerHTML = '<div class="loading">No menu items found</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="menu-grid">' +
+                menuItems.map(item => `
+                    <div class="menu-item-card" data-id="${item.id}">
+                        <div class="menu-item-image">
+                            ${item.image 
+                                ? `<img src="${BACKEND_URL}${item.image}" alt="${item.name}" onerror="this.parentElement.innerHTML='No Image'">`
+                                : 'No Image'}
+                        </div>
+                        <div class="menu-item-form">
+                            <div class="form-group">
+                                <label>Dish Name</label>
+                                <input type="text" class="dish-name" value="${escapeHtml(item.name)}" data-id="${item.id}">
+                            </div>
+                            <div class="form-group">
+                                <label>Price</label>
+                                <input type="number" step="0.01" class="dish-price" value="${item.price}" data-id="${item.id}">
+                            </div>
+                            <div class="image-upload">
+                                <input type="file" accept="image/jpeg,image/jpg,image/png" class="image-input" data-id="${item.id}" id="image-${item.id}">
+                                <label for="image-${item.id}" class="image-upload-label">Upload Image</label>
+                            </div>
+                            <button class="btn save-btn" onclick="saveItem('${item.id}')">Save Changes</button>
+                            <button class="btn btn-danger save-btn" onclick="deleteItem('${item.id}', '${String(item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Remove Dish</button>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Delete dish
+        async function deleteItem(dishId, dishName) {
+            if (!confirm(`Remove "${dishName}" from the menu?`)) {
+                return;
+            }
+            try {
+                const authToken = localStorage.getItem('admin_auth_token');
+                const response = await fetch(`${BACKEND_URL}/api/menu/${dishId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Auth-Token': authToken || ''
+                    },
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Delete failed' }));
+                    throw new Error(errorData.error || 'Failed to remove dish');
+                }
+
+                showMessage('Dish removed successfully', 'success');
+                await loadMenu();
+            } catch (error) {
+                console.error('Error deleting item:', error);
+                showMessage('Error removing dish: ' + error.message, 'error');
+            }
+        }
+
+        // Save item changes
+        async function saveItem(dishId) {
+            const card = document.querySelector(`[data-id="${dishId}"]`);
+            const nameInput = card.querySelector('.dish-name');
+            const priceInput = card.querySelector('.dish-price');
+            const imageInput = card.querySelector('.image-input');
+
+            const name = nameInput.value.trim();
+            const price = parseFloat(priceInput.value);
+
+            if (!name) {
+                showMessage('Dish name is required', 'error');
+                return;
+            }
+
+            if (isNaN(price) || price <= 0) {
+                showMessage('Valid price is required', 'error');
+                return;
+            }
+
+            try {
+                // Get auth token from localStorage
+                const authToken = localStorage.getItem('admin_auth_token');
+                
+                // Update name and price
+                const updateResponse = await fetch(`${BACKEND_URL}/api/menu/${dishId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Token': authToken || ''
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, price })
+                });
+
+                if (!updateResponse.ok) {
+                    const errorData = await updateResponse.json().catch(() => ({ error: 'Update failed' }));
+                    throw new Error(errorData.error || 'Failed to update item');
+                }
+
+                // Upload image if selected
+                if (imageInput.files.length > 0) {
+                    const formData = new FormData();
+                    formData.append('image', imageInput.files[0]);
+                    
+                    // Get auth token from localStorage
+                    const authToken = localStorage.getItem('admin_auth_token');
+
+                    const imageResponse = await fetch(`${BACKEND_URL}/api/menu/${dishId}/image`, {
+                        method: 'POST',
+                        headers: {
+                            'X-Auth-Token': authToken || ''
+                        },
+                        credentials: 'include',
+                        body: formData
+                    });
+
+                    if (!imageResponse.ok) {
+                        throw new Error('Failed to upload image');
+                    }
+                }
+
+                showMessage('Item saved successfully', 'success');
+                // Reload menu to show updated image
+                setTimeout(() => {
+                    loadMenu();
+                }, 1000);
+            } catch (error) {
+                console.error('Error saving item:', error);
+                showMessage('Error saving item: ' + error.message, 'error');
+            }
+        }
+
+        // Initialize
+        (async () => {
+            try {
+                const authenticated = await checkAuth();
+                if (authenticated) {
+                    await loadMenu();
+                }
+            } catch (error) {
+                console.error('Initialization error:', error);
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -740,10 +740,6 @@ app.post('/admin/confirm-booking/:id', async (req, res) => {
     }
 });
 
-// Serve static files from the parent directory (where HTML files are located)
-// This should be AFTER specific routes to avoid conflicts
-app.use(express.static(path.join(__dirname, '..')));
-
 // Telegram Bot Configuration
 const TELEGRAM_BOT_TOKEN = '8426189458:AAH9B4ezmtN-MRj5sSnAUbzqvyLjmUEl28o';
 const TELEGRAM_CHAT_ID = '747453534';
@@ -948,6 +944,93 @@ Phone: ${phone}`;
     req.write(data);
     req.end();
 }
+
+// Helper function to send food order to Telegram
+function sendFoodOrderTelegramMessage(items, total) {
+    const now = new Date();
+    const dateTimeStr = now.toLocaleString('en-GB', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).replace(/\//g, '-');
+    
+    let lines = ['🍔 New Order', ''];
+    items.forEach((item, i) => {
+        lines.push(`${item.quantity}x - ${i + 1}.${item.name}`);
+    });
+    lines.push('');
+    lines.push(`Total: ${total.toFixed(2)} THB`);
+    lines.push('');
+    lines.push(dateTimeStr);
+    
+    const message = lines.join('\n');
+    
+    const data = JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message
+    });
+    
+    const options = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    };
+    
+    const req = https.request(TELEGRAM_API_URL, options, (res) => {
+        let responseData = '';
+        res.on('data', (chunk) => { responseData += chunk; });
+        res.on('end', () => {
+            try {
+                const result = JSON.parse(responseData);
+                if (!result.ok) {
+                    console.log('Telegram food order API error:', result);
+                }
+            } catch (e) {
+                console.log('Telegram food order response parse error:', e);
+            }
+        });
+    });
+    
+    req.on('error', (error) => {
+        console.log('Failed to send Telegram food order:', error);
+    });
+    
+    req.write(data);
+    req.end();
+}
+
+// POST /api/order-food - Receive order and send to Telegram
+app.post('/api/order-food', (req, res) => {
+    try {
+        const { items } = req.body;
+        
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: 'Items array is required' });
+        }
+        
+        let total = 0;
+        const validItems = items.filter(item => {
+            if (!item || !item.name || typeof item.quantity !== 'number' || typeof item.price !== 'number') {
+                return false;
+            }
+            total += item.price * item.quantity;
+            return true;
+        });
+        
+        if (validItems.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid order items' });
+        }
+        
+        sendFoodOrderTelegramMessage(validItems, total);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error processing food order:', error);
+        res.status(500).json({ success: false, error: 'Failed to process order' });
+    }
+});
 
 // GET /booked-dates - Returns unavailable dates for a specific room type
 app.get('/booked-dates', async (req, res) => {
@@ -1330,6 +1413,65 @@ app.post('/api/menu/:id/image', (req, res, next) => {
     }
 });
 
+// Mount menu API routes - using Router ensures DELETE is properly matched
+const menuApiRouter = express.Router();
+
+const menuAuth = (req, res, next) => {
+    if (req.session && req.session.authenticated) return next();
+    if (req.headers['x-auth-token']) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+};
+
+menuApiRouter.delete('/:id', menuAuth, async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        if (!fs.existsSync(MENU_FILE)) {
+            return res.status(404).json({ error: 'Menu file not found' });
+        }
+        let imageMappings = readImageMappings();
+        let rowNumber = imageMappings._rowMapping?.[dishId];
+
+        if (!rowNumber) {
+            await parseMenuFromExcel();
+            imageMappings = readImageMappings();
+            rowNumber = imageMappings._rowMapping?.[dishId];
+        }
+
+        if (!rowNumber) {
+            return res.status(404).json({ error: 'Dish not found' });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(MENU_FILE);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+            return res.status(500).json({ error: 'No worksheet found' });
+        }
+
+        worksheet.spliceRows(rowNumber, 1);
+
+        delete imageMappings[dishId];
+        if (imageMappings._rowMapping) {
+            delete imageMappings._rowMapping[dishId];
+            for (const id in imageMappings._rowMapping) {
+                if (imageMappings._rowMapping[id] > rowNumber) {
+                    imageMappings._rowMapping[id]--;
+                }
+            }
+        }
+        saveImageMappings(imageMappings);
+        await workbook.xlsx.writeFile(MENU_FILE);
+        clearMenuCache();
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting menu item:', error);
+        res.status(500).json({ error: 'Failed to delete dish' });
+    }
+});
+
+app.use('/api/menu', menuApiRouter);
+
 // PUT /api/menu/:id - Update dish name and price (admin only)
 app.put('/api/menu/:id', (req, res, next) => {
     // Check both session and localStorage token for cross-window auth
@@ -1374,6 +1516,9 @@ app.put('/api/menu/:id', (req, res, next) => {
 
 // Serve menu images statically
 app.use('/api/menu-images', express.static(MENU_IMAGES_DIR));
+
+// Serve static files from the parent directory (AFTER all API routes)
+app.use(express.static(path.join(__dirname, '..')));
 
 // Start server
 app.listen(PORT, () => {
