@@ -37,6 +37,10 @@ const translations = {
         guests_2: '2 Guests',
         guests_3: '3 Guests',
         guests_4: '4 Guests',
+        name_label: 'Name',
+        name_placeholder: 'Enter your name',
+        surname_label: 'Surname',
+        surname_placeholder: 'Enter your surname',
         phone_label: 'Phone Number',
         phone_placeholder: 'Enter your phone number',
         checkin_checkout_info: 'Check-in after 2:00 PM; Check-out before 12:00 PM',
@@ -57,6 +61,8 @@ const translations = {
         err_checkout_after: 'Check-out date must be after check-in date',
         err_roomtype_required: 'Please select a room type',
         err_guests_required: 'Please select number of guests',
+        err_name_required: 'Name is required',
+        err_surname_required: 'Surname is required',
         err_phone_required: 'Phone number is required',
         err_phone_invalid: 'Please enter a valid phone number',
         err_prefix: 'Please fill in all required fields correctly:\\n\\n',
@@ -95,6 +101,10 @@ const translations = {
         guests_2: '2 гостя',
         guests_3: '3 гостя',
         guests_4: '4 гостя',
+        name_label: 'Имя',
+        name_placeholder: 'Введите имя',
+        surname_label: 'Фамилия',
+        surname_placeholder: 'Введите фамилию',
         phone_label: 'Номер телефона',
         phone_placeholder: 'Введите номер телефона',
         checkin_checkout_info: 'Заезд после 14:00; Выезд до 12:00',
@@ -115,6 +125,8 @@ const translations = {
         err_checkout_after: 'Дата выезда должна быть позже даты заезда',
         err_roomtype_required: 'Выберите тип номера',
         err_guests_required: 'Выберите количество гостей',
+        err_name_required: 'Укажите имя',
+        err_surname_required: 'Укажите фамилию',
         err_phone_required: 'Номер телефона обязателен',
         err_phone_invalid: 'Введите корректный номер телефона',
         err_prefix: 'Пожалуйста, заполните все обязательные поля корректно:\\n\\n',
@@ -624,11 +636,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Send booking to backend
-async function sendBookingToBackend(checkin, checkout, roomType, guests, phone) {
-    console.log('🚀 Starting booking submission...', { checkin, checkout, roomType, guests, phone });
+async function sendBookingToBackend(checkin, checkout, roomType, guests, name, surname, phone) {
+    console.log('🚀 Starting booking submission...', { checkin, checkout, roomType, guests, name, surname, phone });
     
     // Validate payload before sending
-    if (!checkin || !checkout || !roomType || !guests || !phone) {
+    if (!checkin || !checkout || !roomType || !guests || !name || !surname || !phone) {
         console.log('❌ Validation failed: Missing required fields');
         return { success: false, error: 'Missing required fields' };
     }
@@ -639,6 +651,8 @@ async function sendBookingToBackend(checkin, checkout, roomType, guests, phone) 
             checkIn: checkin,
             checkOut: checkout,
             guests,
+            name,
+            surname,
             phone
         };
         
@@ -698,6 +712,8 @@ function handleBookingSubmit(event) {
         : document.getElementById('checkout').value;
     const roomType = document.getElementById('roomType').value;
     const guests = document.getElementById('guests').value;
+    const name = document.getElementById('name').value.trim();
+    const surname = document.getElementById('surname').value.trim();
     const phone = document.getElementById('phone').value.trim();
     
     // Validation
@@ -729,6 +745,16 @@ function handleBookingSubmit(event) {
         isValid = false;
     }
     
+    if (!name) {
+        errors.push(t('err_name_required'));
+        isValid = false;
+    }
+    
+    if (!surname) {
+        errors.push(t('err_surname_required'));
+        isValid = false;
+    }
+    
     if (!phone) {
         errors.push(t('err_phone_required'));
         isValid = false;
@@ -751,7 +777,7 @@ function handleBookingSubmit(event) {
     submitButton.style.opacity = '0.6';
     submitButton.style.cursor = 'not-allowed';
     
-    sendBookingToBackend(checkin, checkout, roomType, guests, phone)
+    sendBookingToBackend(checkin, checkout, roomType, guests, name, surname, phone)
         .then(result => {
             
             // Re-enable button

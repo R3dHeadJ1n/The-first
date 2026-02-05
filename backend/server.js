@@ -58,6 +58,7 @@ const BOOKINGS_FILE = path.join(__dirname, 'bookings.xlsx');
 const MENU_FILE = path.join(__dirname, 'menu.xlsx');
 const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
 const MENU_IMAGES_MAPPING_FILE = path.join(__dirname, 'menu-images.json');
+const TELEGRAM_MESSAGES_FILE = path.join(__dirname, 'telegram-messages.json');
 
 // Ensure menu images directory exists
 if (!fs.existsSync(MENU_IMAGES_DIR)) {
@@ -114,7 +115,9 @@ async function initializeExcelFile() {
                     { header: 'Phone', key: 'phone', width: 20 },
                     { header: 'Source', key: 'source', width: 15 },
                     { header: 'Created At', key: 'createdAt', width: 25 },
-                    { header: 'Status', key: 'status', width: 10 }
+                    { header: 'Status', key: 'status', width: 10 },
+                    { header: 'Name', key: 'name', width: 20 },
+                    { header: 'Surname', key: 'surname', width: 20 }
                 ];
                 
                 // Style header row
@@ -139,7 +142,9 @@ async function initializeExcelFile() {
                 { header: 'Phone', key: 'phone', width: 20 },
                 { header: 'Source', key: 'source', width: 15 },
                 { header: 'Created At', key: 'createdAt', width: 25 },
-                { header: 'Status', key: 'status', width: 10 }
+                { header: 'Status', key: 'status', width: 10 },
+                { header: 'Name', key: 'name', width: 20 },
+                { header: 'Surname', key: 'surname', width: 20 }
             ];
             
             // Style header row
@@ -163,7 +168,9 @@ async function initializeExcelFile() {
             { header: 'Phone', key: 'phone', width: 20 },
             { header: 'Source', key: 'source', width: 15 },
             { header: 'Created At', key: 'createdAt', width: 25 },
-            { header: 'Status', key: 'status', width: 10 }
+            { header: 'Status', key: 'status', width: 10 },
+            { header: 'Name', key: 'name', width: 20 },
+            { header: 'Surname', key: 'surname', width: 20 }
         ];
         
         // Style header row
@@ -220,7 +227,9 @@ async function readBookingsFromExcel() {
                     phone: row.getCell(7).value || null, // Phone
                     source: row.getCell(8).value,        // Source
                     createdAt: row.getCell(9).value,     // Created At
-                    status: status || 'active'
+                    status: status || 'active',
+                    name: (row.getCell(11) && row.getCell(11).value) ? String(row.getCell(11).value) : null,
+                    surname: (row.getCell(12) && row.getCell(12).value) ? String(row.getCell(12).value) : null
                 };
                 
                 console.log(`Row ${rowNumber}: Found booking:`, booking.id, booking.roomId, booking.checkIn);
@@ -264,7 +273,9 @@ async function addBookingToExcel(booking) {
                 { header: 'Phone', key: 'phone', width: 20 },
                 { header: 'Source', key: 'source', width: 15 },
                 { header: 'Created At', key: 'createdAt', width: 25 },
-                { header: 'Status', key: 'status', width: 10 }
+                { header: 'Status', key: 'status', width: 10 },
+                { header: 'Name', key: 'name', width: 20 },
+                { header: 'Surname', key: 'surname', width: 20 }
             ];
         }
         
@@ -280,6 +291,8 @@ async function addBookingToExcel(booking) {
         newRow.getCell(8).value = booking.source;
         newRow.getCell(9).value = booking.createdAt;
         newRow.getCell(10).value = booking.status || 'active';
+        newRow.getCell(11).value = booking.name || '';
+        newRow.getCell(12).value = booking.surname || '';
         
         // Style the new row
         newRow.eachCell((cell) => {
@@ -606,6 +619,7 @@ app.delete('/admin/booking/:id', async (req, res) => {
         const success = await markBookingAsDeleted(bookingId);
         
         if (success) {
+            updateTelegramBookingMessage(bookingId, 'deleted');
             res.json({ success: true, message: 'Booking marked as deleted (row colored red)' });
         } else {
             res.status(404).json({ success: false, error: 'Booking not found' });
@@ -730,6 +744,7 @@ app.post('/admin/confirm-booking/:id', async (req, res) => {
         const success = await updateBookingStatus(bookingId, 'confirmed', roomId);
         
         if (success) {
+            updateTelegramBookingMessage(bookingId, 'confirmed');
             res.json({ success: true, message: 'Booking confirmed successfully' });
         } else {
             res.status(404).json({ success: false, error: 'Booking not found' });
@@ -743,7 +758,9 @@ app.post('/admin/confirm-booking/:id', async (req, res) => {
 // Telegram Bot Configuration
 const TELEGRAM_BOT_TOKEN = '8426189458:AAH9B4ezmtN-MRj5sSnAUbzqvyLjmUEl28o';
 const TELEGRAM_CHAT_ID = '747453534';
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+const TELEGRAM_ADMIN_CHAT_IDS = [TELEGRAM_CHAT_ID];
+const TELEGRAM_API_BASE = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const TELEGRAM_API_URL = `${TELEGRAM_API_BASE}/sendMessage`;
 
 // Helper function to get all dates between check-in and check-out
 function getDatesBetween(checkIn, checkOut) {
@@ -910,8 +927,23 @@ app.delete('/admin/book-room', async (req, res) => {
     }
 });
 
-// Helper function to send Telegram message
-function sendTelegramMessage(roomType, checkIn, checkOut, guests, phone) {
+function readTelegramMessages() {
+    try {
+        if (fs.existsSync(TELEGRAM_MESSAGES_FILE)) {
+            return JSON.parse(fs.readFileSync(TELEGRAM_MESSAGES_FILE, 'utf8'));
+        }
+    } catch (e) { /* ignore */ }
+    return {};
+}
+
+function saveTelegramMessage(bookingId, chatId, messageId, text) {
+    const m = readTelegramMessages();
+    m[bookingId] = { chatId, messageId, text };
+    fs.writeFileSync(TELEGRAM_MESSAGES_FILE, JSON.stringify(m, null, 2));
+}
+
+// Helper function to send Telegram message with inline Confirm/Delete buttons
+function sendTelegramMessage(roomType, checkIn, checkOut, guests, name, surname, phone, bookingId) {
     const roomTypeText = roomType === 'big' ? 'Big room' : 'Small room';
     const { nights, pricePerNight, total } = calcNightsAndTotal(checkIn, checkOut, roomType);
     
@@ -923,40 +955,154 @@ Nights: ${nights}
 Price per night: ${pricePerNight} Bath
 Total: ${total} Bath
 Guests: ${guests}
+Name: ${name}
+Surname: ${surname}
 Phone: ${phone}`;
     
-    // Send to Telegram
-    const data = JSON.stringify({
+    const payload = {
         chat_id: TELEGRAM_CHAT_ID,
         text: message
-    });
+    };
+    if (bookingId) {
+        payload.reply_markup = {
+            inline_keyboard: [
+                [{ text: '✅ Confirm', callback_data: `confirm:${bookingId}` }, { text: '❌ Delete', callback_data: `delete:${bookingId}` }]
+            ]
+        };
+    }
+    const data = JSON.stringify(payload);
     
     const options = {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
+        headers: { 'Content-Type': 'application/json' }
     };
     
     const req = https.request(TELEGRAM_API_URL, options, (res) => {
         let responseData = '';
-        res.on('data', (chunk) => {
-            responseData += chunk;
-        });
+        res.on('data', (chunk) => { responseData += chunk; });
         res.on('end', () => {
-            const result = JSON.parse(responseData);
-            if (!result.ok) {
-                console.log('Telegram API error:', result);
-            }
+            try {
+                const result = JSON.parse(responseData);
+                if (result.ok && bookingId && result.result?.message_id) {
+                    saveTelegramMessage(bookingId, TELEGRAM_CHAT_ID, result.result.message_id, message);
+                } else if (!result.ok) {
+                    console.log('Telegram API error:', result);
+                }
+            } catch (e) { /* ignore */ }
         });
     });
-    
-    req.on('error', (error) => {
-        console.log('Failed to send Telegram message:', error);
-    });
-    
+    req.on('error', (e) => console.log('Failed to send Telegram message:', e));
     req.write(data);
     req.end();
+}
+
+function updateTelegramBookingMessage(bookingId, newStatus) {
+    const m = readTelegramMessages()[bookingId];
+    if (!m || !m.text) return;
+    const baseText = (m.text || '').replace(/\n\n[✅❌] Status: .+$/, '').trim();
+    const newText = baseText + '\n\n' + (newStatus === 'confirmed' ? '✅ ' : '❌ ') + `Status: ${newStatus}`;
+    telegramApiRequest('editMessageText', {
+        chat_id: m.chatId,
+        message_id: m.messageId,
+        text: newText,
+        reply_markup: { inline_keyboard: [] }
+    });
+}
+
+// Telegram webhook: handle callback_query (Confirm/Delete buttons)
+app.post('/telegram-webhook', (req, res) => {
+    res.status(200).send();
+    const cb = req.body?.callback_query;
+    if (cb) processTelegramCallback(cb);
+});
+
+function telegramApiRequest(method, body) {
+    const url = new URL(`${TELEGRAM_API_BASE}/${method}`);
+    const data = JSON.stringify(body);
+    const options = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    };
+    const req = https.request(url, options, (res) => {
+        let buf = '';
+        res.on('data', (c) => { buf += c; });
+        res.on('end', () => {
+            try {
+                const r = JSON.parse(buf);
+                if (!r.ok) console.log('Telegram API error:', r);
+            } catch (e) { /* ignore */ }
+        });
+    });
+    req.on('error', (e) => console.log('Telegram request error:', e));
+    req.write(data);
+    req.end();
+}
+
+function telegramApiRequestAsync(method, body) {
+    return new Promise((resolve) => {
+        const url = new URL(`${TELEGRAM_API_BASE}/${method}`);
+        const data = JSON.stringify(body);
+        const options = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+        const req = https.request(url, options, (res) => {
+            let buf = '';
+            res.on('data', (c) => { buf += c; });
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(buf));
+                } catch (e) {
+                    resolve({ ok: false });
+                }
+            });
+        });
+        req.on('error', () => resolve({ ok: false }));
+        req.write(data);
+        req.end();
+    });
+}
+
+function processTelegramCallback(cb) {
+    const chatId = cb.message?.chat?.id;
+    if (!TELEGRAM_ADMIN_CHAT_IDS.includes(String(chatId))) {
+        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Not authorized' });
+        return;
+    }
+    const data = String(cb.data || '');
+    const [action, bookingId] = data.split(':');
+    if (!bookingId || !['confirm', 'delete'].includes(action)) return;
+
+    const newStatus = action === 'confirm' ? 'confirmed' : 'deleted';
+    updateBookingStatus(bookingId, newStatus).then((success) => {
+        const statusText = success ? `Status: ${newStatus}` : 'Update failed';
+        const msg = cb.message;
+        const emoji = (success && newStatus === 'confirmed') ? '✅' : '❌';
+        const newText = (msg.text || '') + '\n\n' + `${emoji} ${statusText}`;
+        telegramApiRequest('editMessageText', {
+            chat_id: chatId,
+            message_id: msg.message_id,
+            text: newText,
+            reply_markup: { inline_keyboard: [] }
+        });
+        telegramApiRequest('answerCallbackQuery', {
+            callback_query_id: cb.id,
+            text: success ? `Booking ${newStatus}` : 'Failed to update'
+        });
+    });
+}
+
+function startTelegramPolling() {
+    let offset = 0;
+    const poll = async () => {
+        try {
+            const r = await telegramApiRequestAsync('getUpdates', { offset, timeout: 25 });
+            if (!r.ok || !r.result) return;
+            for (const u of r.result) {
+                offset = u.update_id + 1;
+                if (u.callback_query) processTelegramCallback(u.callback_query);
+            }
+        } catch (e) { /* ignore */ }
+    };
+    poll();
+    setInterval(poll, 500);
 }
 
 // Helper function to send food order to Telegram
@@ -1144,10 +1290,10 @@ cleanupExpiredBookings().catch(err => console.error('Initial cleanup error:', er
 // POST /book-room - Save booking and send Telegram message
 app.post('/book-room', async (req, res) => {
     try {
-        const { roomType, checkIn, checkOut, guests, phone } = req.body;
+        const { roomType, checkIn, checkOut, guests, name, surname, phone } = req.body;
         
         // Validate required fields
-        if (!roomType || !checkIn || !checkOut || !guests || !phone) {
+        if (!roomType || !checkIn || !checkOut || !guests || !name || !surname || !phone) {
             return res.status(400).json({ 
                 success: false, 
                 error: 'Missing required fields' 
@@ -1162,6 +1308,8 @@ app.post('/book-room', async (req, res) => {
             checkIn,
             checkOut,
             guests,
+            name: (name || '').trim(),
+            surname: (surname || '').trim(),
             phone,
             source: 'user',
             createdAt: new Date().toISOString(),
@@ -1178,8 +1326,8 @@ app.post('/book-room', async (req, res) => {
             });
         }
         
-        // Send Telegram message
-        sendTelegramMessage(roomType, checkIn, checkOut, guests, phone);
+        // Send Telegram message with inline buttons
+        sendTelegramMessage(roomType, checkIn, checkOut, guests, name, surname, phone, booking.id);
         
         // Return success
         res.json({ success: true });
@@ -1537,6 +1685,7 @@ app.use(express.static(path.join(__dirname, '..')));
 // Start server
 app.listen(PORT, () => {
     console.log(`Backend server running on http://localhost:${PORT}`);
+    startTelegramPolling();
     // Parse menu on startup
     parseMenuFromExcel().then(items => {
         console.log(`Menu loaded: ${items.length} items`);

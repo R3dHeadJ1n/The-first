@@ -528,6 +528,7 @@
         
         let adminCheckInPicker = null;
         let adminCheckOutPicker = null;
+        let unconfirmedBookingsCache = [];
 
         // Check authentication status on page load
         function checkAuth() {
@@ -694,7 +695,7 @@
                                 <strong>BOOKING #${bookingNumber++}:</strong> 
                                 <span class="room-name">${roomName}</span> 
                                 <span class="dates">${dateRange}</span><br>
-                                <span class="dates">${nights} nights · Total: ${total.toLocaleString()} Bath</span>
+                                <span class="dates">${[booking.name, booking.surname].filter(Boolean).join(' ') || '—'} · ${nights} nights · Total: ${total.toLocaleString()} Bath</span>
                             </div>
                             <button class="booking-delete-btn" onclick="deleteBooking('${booking.id}')">Delete</button>
                         </div>
@@ -728,6 +729,7 @@
                 }
 
                 const bookings = await response.json();
+                unconfirmedBookingsCache = bookings;
                 
                 if (bookings.length === 0) {
                     unconfirmedList.innerHTML = '<div class="no-bookings">No unconfirmed bookings</div>';
@@ -752,7 +754,7 @@
                             <div class="booking-info">
                                 <strong>${roomTypeText}</strong><br>
                                 <span class="dates">${dateRange}</span><br>
-                                <span>${nights} nights · Total: ${total.toLocaleString()} Bath</span><br>
+                                <span>${[booking.name, booking.surname].filter(Boolean).join(' ') || '—'} · ${nights} nights · Total: ${total.toLocaleString()} Bath</span><br>
                                 <span>Guests: ${booking.guests}</span><br>
                                 <span>Phone: ${booking.phone}</span>
                             </div>
@@ -788,10 +790,12 @@
                 : `${checkInFormatted}-${checkOutFormatted}`;
             
             const { nights, total } = calcNightsAndTotal(checkIn, checkOut, roomType);
+            const booking = unconfirmedBookingsCache.find(b => b.id === bookingId);
+            const nameSurname = booking ? `${booking.name || ''} ${booking.surname || ''}`.trim() : '';
             document.getElementById('roomSelectionInfo').innerHTML = `
                 <p><strong>${roomTypeText}</strong></p>
                 <p>Dates: ${dateRange}</p>
-                <p>${nights} nights · Total: ${total.toLocaleString()} Bath</p>
+                <p>${nameSurname || '—'} · ${nights} nights · Total: ${total.toLocaleString()} Bath</p>
             `;
             
             // Show modal
