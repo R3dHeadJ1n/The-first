@@ -617,6 +617,18 @@
             return `${day}.${month}.${year}`;
         }
 
+        // Room prices per night (Bath) - same as frontend/backend
+        const ROOM_PRICES = { small: 700, big: 900 };
+        
+        function calcNightsAndTotal(checkIn, checkOut, roomType) {
+            const start = new Date(checkIn + 'T00:00:00');
+            const end = new Date(checkOut + 'T00:00:00');
+            const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+            const pricePerNight = ROOM_PRICES[roomType] || 0;
+            const total = pricePerNight * nights;
+            return { nights, pricePerNight, total };
+        }
+
         // Format room name (big-1 -> BIG ROOM#1)
         function formatRoomName(roomId) {
             if (!roomId) return 'Unknown';
@@ -668,18 +680,21 @@
                 let bookingNumber = 1;
                 bookingsList.innerHTML = bookings.map(booking => {
                     const roomName = formatRoomName(booking.roomId);
+                    const roomType = booking.roomId ? (booking.roomId.startsWith('big-') ? 'big' : 'small') : booking.roomType || 'small';
                     const checkInFormatted = formatDate(booking.checkIn);
                     const checkOutFormatted = formatDate(booking.checkOut);
                     const dateRange = checkInFormatted === checkOutFormatted 
                         ? checkInFormatted 
                         : `${checkInFormatted}-${checkOutFormatted}`;
+                    const { nights, total } = calcNightsAndTotal(booking.checkIn, booking.checkOut, roomType);
                     
                     return `
                         <div class="booking-item">
                             <div class="booking-info">
                                 <strong>BOOKING #${bookingNumber++}:</strong> 
                                 <span class="room-name">${roomName}</span> 
-                                <span class="dates">${dateRange}</span>
+                                <span class="dates">${dateRange}</span><br>
+                                <span class="dates">${nights} nights · Total: ${total.toLocaleString()} Bath</span>
                             </div>
                             <button class="booking-delete-btn" onclick="deleteBooking('${booking.id}')">Delete</button>
                         </div>
@@ -730,12 +745,14 @@
                     const dateRange = checkInFormatted === checkOutFormatted 
                         ? checkInFormatted 
                         : `${checkInFormatted}-${checkOutFormatted}`;
+                    const { nights, total } = calcNightsAndTotal(booking.checkIn, booking.checkOut, booking.roomType);
                     
                     return `
                         <div class="booking-item">
                             <div class="booking-info">
                                 <strong>${roomTypeText}</strong><br>
                                 <span class="dates">${dateRange}</span><br>
+                                <span>${nights} nights · Total: ${total.toLocaleString()} Bath</span><br>
                                 <span>Guests: ${booking.guests}</span><br>
                                 <span>Phone: ${booking.phone}</span>
                             </div>
@@ -770,9 +787,11 @@
                 ? checkInFormatted 
                 : `${checkInFormatted}-${checkOutFormatted}`;
             
+            const { nights, total } = calcNightsAndTotal(checkIn, checkOut, roomType);
             document.getElementById('roomSelectionInfo').innerHTML = `
                 <p><strong>${roomTypeText}</strong></p>
                 <p>Dates: ${dateRange}</p>
+                <p>${nights} nights · Total: ${total.toLocaleString()} Bath</p>
             `;
             
             // Show modal

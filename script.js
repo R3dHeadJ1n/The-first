@@ -29,8 +29,8 @@ const translations = {
         checkout_label: 'Check-out Date',
         roomtype_label: 'Room Type',
         roomtype_placeholder: 'Select room type',
-        roomtype_big: 'Big room',
-        roomtype_small: 'Small room',
+        roomtype_small: 'Single room',
+        roomtype_big: 'Double room',
         guests_label: 'Number of Guests',
         guests_placeholder: 'Select number of guests',
         guests_1: '1 Guest',
@@ -40,6 +40,10 @@ const translations = {
         phone_label: 'Phone Number',
         phone_placeholder: 'Enter your phone number',
         checkin_checkout_info: 'Check-in after 2:00 PM; Check-out before 12:00 PM',
+        nights_label: 'Nights:',
+        price_per_night_label: 'Price per night:',
+        total_price_label: 'Total:',
+        currency: 'Bath',
         book_submit: 'Book a Room',
 
         // Success modal
@@ -83,8 +87,8 @@ const translations = {
         checkout_label: 'Дата выезда',
         roomtype_label: 'Тип номера',
         roomtype_placeholder: 'Выберите тип номера',
-        roomtype_big: 'Большой номер',
-        roomtype_small: 'Малый номер',
+        roomtype_small: 'Одноместный номер',
+        roomtype_big: 'Двухместный номер',
         guests_label: 'Количество гостей',
         guests_placeholder: 'Выберите количество гостей',
         guests_1: '1 гость',
@@ -94,6 +98,10 @@ const translations = {
         phone_label: 'Номер телефона',
         phone_placeholder: 'Введите номер телефона',
         checkin_checkout_info: 'Заезд после 14:00; Выезд до 12:00',
+        nights_label: 'Ночей:',
+        price_per_night_label: 'Цена за ночь:',
+        total_price_label: 'Итого:',
+        currency: 'Бат',
         book_submit: 'Забронировать номер',
 
         // Success modal
@@ -158,6 +166,12 @@ function applyTranslations(lang) {
     if (langSwitcher) {
         langSwitcher.classList.remove('open');
     }
+    
+    // Refresh guests dropdown if room type is selected (for language switch)
+    const roomTypeSelect = document.getElementById('roomType');
+    if (roomTypeSelect && typeof updateGuestsDropdown === 'function') {
+        updateGuestsDropdown(roomTypeSelect.value);
+    }
 }
 
 // Language button click handler
@@ -189,6 +203,9 @@ document.addEventListener('click', (e) => {
 
 // Backend API Configuration
 const BACKEND_URL = 'http://localhost:3001';
+
+// Room prices per night (Bath)
+const ROOM_PRICES = { small: 700, big: 900 };
 
 // Get modal elements
 const bookingModal = document.getElementById('bookingModal');
@@ -431,6 +448,44 @@ function checkAvailability() {
         if (submitButton) submitButton.disabled = false;
         if (availabilityMessage) availabilityMessage.style.display = 'none';
     }
+    
+    updateBookingSummary();
+}
+
+// Update booking summary (nights, price per night, total)
+function updateBookingSummary() {
+    const summaryEl = document.getElementById('bookingSummary');
+    const nightsEl = document.getElementById('nightsCount');
+    const pricePerNightEl = document.getElementById('pricePerNight');
+    const totalEl = document.getElementById('totalPrice');
+    
+    if (!summaryEl || !nightsEl || !pricePerNightEl || !totalEl) return;
+    
+    const roomType = document.getElementById('roomType')?.value;
+    const checkin = checkinPicker?.selectedDates?.[0];
+    const checkout = checkoutPicker?.selectedDates?.[0];
+    
+    if (!roomType || !checkin || !checkout || !ROOM_PRICES[roomType]) {
+        summaryEl.style.display = 'none';
+        return;
+    }
+    
+    const checkinDate = new Date(checkin);
+    const checkoutDate = new Date(checkout);
+    const nights = Math.ceil((checkoutDate - checkinDate) / (1000 * 60 * 60 * 24));
+    
+    if (nights <= 0) {
+        summaryEl.style.display = 'none';
+        return;
+    }
+    
+    const pricePerNight = ROOM_PRICES[roomType];
+    const total = pricePerNight * nights;
+    
+    nightsEl.textContent = nights;
+    pricePerNightEl.textContent = pricePerNight.toLocaleString();
+    totalEl.textContent = total.toLocaleString();
+    summaryEl.style.display = 'block';
 }
 
 // Open booking modal
@@ -443,6 +498,13 @@ function openBookingModal() {
     if (roomTypeSelect) {
         roomTypeSelect.value = '';
     }
+    
+    // Reset guests dropdown (no options until room type selected)
+    updateGuestsDropdown('');
+    
+    // Hide booking summary
+    const bookingSummary = document.getElementById('bookingSummary');
+    if (bookingSummary) bookingSummary.style.display = 'none';
     
     // Hide availability message
     document.getElementById('availabilityMessage').style.display = 'none';
@@ -749,6 +811,31 @@ function initializeLanguage() {
 // Initialize language on page load
 initializeLanguage();
 
+// Update guests dropdown based on room type: small (single) = 1-2, big (double) = 1-4
+function updateGuestsDropdown(roomType) {
+    const guestsSelect = document.getElementById('guests');
+    if (!guestsSelect) return;
+    
+    const maxGuests = roomType === 'small' ? 2 : roomType === 'big' ? 4 : 0;
+    guestsSelect.innerHTML = '';
+    
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = t('guests_placeholder');
+    placeholder.selected = true;
+    placeholder.disabled = true;
+    guestsSelect.appendChild(placeholder);
+    
+    if (maxGuests > 0) {
+        for (let i = 1; i <= maxGuests; i++) {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = t(`guests_${i}`);
+            guestsSelect.appendChild(opt);
+        }
+    }
+}
+
 // Room type change handler
 const roomTypeSelect = document.getElementById('roomType');
 if (roomTypeSelect) {
@@ -757,6 +844,8 @@ if (roomTypeSelect) {
         const availabilityMessage = document.getElementById('availabilityMessage');
         const checkinInput = document.getElementById('checkin');
         const checkoutInput = document.getElementById('checkout');
+        
+        updateGuestsDropdown(selectedRoomType);
         
         if (selectedRoomType) {
             // Hide availability message initially

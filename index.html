@@ -32,8 +32,8 @@
                     <label for="roomType" data-i18n="roomtype_label">Room Type</label>
                     <select id="roomType" name="roomType" required>
                         <option value="" data-i18n="roomtype_placeholder" selected disabled>Select room type</option>
-                        <option value="small" data-i18n="roomtype_small">Small room</option>
-                        <option value="big" data-i18n="roomtype_big">Big room</option>
+                        <option value="small" data-i18n="roomtype_small">Single room</option>
+                        <option value="big" data-i18n="roomtype_big">Double room</option>
                     </select>
                 </div>
 
@@ -67,6 +67,12 @@
                     <label for="phone"><span data-i18n="phone_label">Phone Number</span> <span class="required">*</span></label>
                     <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" data-i18n-placeholder="phone_placeholder" required>
                     <p class="checkin-checkout-info" data-i18n="checkin_checkout_info">Check-in after 2:00 PM; Check-out before 12:00 PM</p>
+                </div>
+                
+                <div id="bookingSummary" class="booking-summary" style="display: none;">
+                    <p class="booking-summary-line"><span data-i18n="nights_label">Nights:</span> <span id="nightsCount">—</span></p>
+                    <p class="booking-summary-line"><span data-i18n="price_per_night_label">Price per night:</span> <span id="pricePerNight">—</span> <span data-i18n="currency">Bath</span></p>
+                    <p class="booking-summary-line booking-summary-total"><span data-i18n="total_price_label">Total:</span> <span id="totalPrice">—</span> <span data-i18n="currency">Bath</span></p>
                 </div>
                 
                 <button type="button" id="bookRoomBtn" class="btn btn-room btn-submit" data-i18n="book_submit">Book a Room</button>

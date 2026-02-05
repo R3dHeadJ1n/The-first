@@ -695,6 +695,33 @@ body {
     line-height: 1.4;
 }
 
+.booking-summary {
+    background: rgba(245, 240, 232, 0.8);
+    border: 1px solid rgba(153, 19, 5, 0.2);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0 16px;
+}
+
+.booking-summary-line {
+    margin: 8px 0;
+    font-size: 15px;
+    color: #333;
+}
+
+.booking-summary-line:first-child {
+    margin-top: 0;
+}
+
+.booking-summary-total {
+    font-weight: 700;
+    font-size: 18px;
+    color: #991305;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 2px solid rgba(153, 19, 5, 0.2);
+}
+
 .btn-submit {
     width: 100%;
     margin-top: 10px;

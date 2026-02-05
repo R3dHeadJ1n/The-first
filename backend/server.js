@@ -790,6 +790,18 @@ function getRoomTypeFromId(roomId) {
     return roomId.startsWith('big-') ? 'big' : 'small';
 }
 
+// Room prices per night (Bath) - same as frontend
+const ROOM_PRICES = { small: 700, big: 900 };
+
+function calcNightsAndTotal(checkIn, checkOut, roomType) {
+    const start = new Date(checkIn + 'T00:00:00');
+    const end = new Date(checkOut + 'T00:00:00');
+    const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    const pricePerNight = ROOM_PRICES[roomType] || 0;
+    const total = pricePerNight * nights;
+    return { nights, pricePerNight, total };
+}
+
 // POST /admin/book-room - Admin marks room as unavailable
 app.post('/admin/book-room', async (req, res) => {
     try {
@@ -900,14 +912,16 @@ app.delete('/admin/book-room', async (req, res) => {
 
 // Helper function to send Telegram message
 function sendTelegramMessage(roomType, checkIn, checkOut, guests, phone) {
-    // Format room type
     const roomTypeText = roomType === 'big' ? 'Big room' : 'Small room';
+    const { nights, pricePerNight, total } = calcNightsAndTotal(checkIn, checkOut, roomType);
     
-    // Format message
     const message = `📢 New Booking
 Room: ${roomTypeText}
 Check-in: ${checkIn}
 Check-out: ${checkOut}
+Nights: ${nights}
+Price per night: ${pricePerNight} Bath
+Total: ${total} Bath
 Guests: ${guests}
 Phone: ${phone}`;
     
