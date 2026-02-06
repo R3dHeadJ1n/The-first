@@ -60,6 +60,7 @@ const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
 const MENU_IMAGES_MAPPING_FILE = path.join(__dirname, 'menu-images.json');
 const TELEGRAM_MESSAGES_FILE = path.join(__dirname, 'telegram-messages.json');
 const FOOD_ORDERS_FILE = path.join(__dirname, 'food-orders.json');
+const FOOD_ORDERS_EXCEL_FILE = path.join(__dirname, 'orders.xlsx');
 const TELEGRAM_ORDER_MESSAGES_FILE = path.join(__dirname, 'telegram-order-messages.json');
 
 // Ensure menu images directory exists
@@ -667,6 +668,7 @@ function updateOrderStatus(orderId, newStatus) {
     if (!order) return false;
     order.status = newStatus;
     saveOrders(data);
+    updateOrderStatusInExcel(orderId, newStatus).catch(e => console.error('Excel update error:', e));
     return true;
 }
 
@@ -742,6 +744,7 @@ app.post('/admin/clear-history', (req, res) => {
         const data = readOrders();
         data.orders = data.orders.filter(o => o.status === 'unconfirmed' || o.status === 'live');
         saveOrders(data);
+        clearOrdersHistoryInExcel().catch(e => console.error('Excel clear error:', e));
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to clear history' });
@@ -1154,6 +1157,160 @@ function readOrders() {
 
 function saveOrders(data) {
     fs.writeFileSync(FOOD_ORDERS_FILE, JSON.stringify(data, null, 2));
+}
+
+// Orders Excel file operations
+const ORDERS_EXCEL_COLS = {
+    id: 1, name: 2, phone: 3, communication: 4, items: 5, total: 6, status: 7, createdAt: 8
+};
+
+function formatOrderItemsForExcel(items) {
+    if (!items || !Array.isArray(items)) return '';
+    return items.map(it => `${it.quantity}x ${it.name} (${(it.price * it.quantity).toFixed(2)} THB)`).join('; ');
+}
+
+async function initializeOrdersExcelFile() {
+    const workbook = new ExcelJS.Workbook();
+    if (fs.existsSync(FOOD_ORDERS_EXCEL_FILE)) {
+        try {
+            await workbook.xlsx.readFile(FOOD_ORDERS_EXCEL_FILE);
+            let worksheet = workbook.getWorksheet('Orders');
+            if (!worksheet) {
+                worksheet = workbook.addWorksheet('Orders');
+                worksheet.columns = [
+                    { header: 'ID', key: 'id', width: 35 },
+                    { header: 'Customer Name', key: 'name', width: 20 },
+                    { header: 'Phone', key: 'phone', width: 20 },
+                    { header: 'Communication', key: 'communication', width: 15 },
+                    { header: 'Items', key: 'items', width: 50 },
+                    { header: 'Total (THB)', key: 'total', width: 12 },
+                    { header: 'Status', key: 'status', width: 12 },
+                    { header: 'Created At', key: 'createdAt', width: 25 }
+                ];
+                worksheet.getRow(1).font = { bold: true };
+                worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+            }
+        } catch (e) {
+            console.error('Error reading orders Excel, creating new:', e);
+            const worksheet = workbook.addWorksheet('Orders');
+            worksheet.columns = [
+                { header: 'ID', key: 'id', width: 35 },
+                { header: 'Customer Name', key: 'name', width: 20 },
+                { header: 'Phone', key: 'phone', width: 20 },
+                { header: 'Communication', key: 'communication', width: 15 },
+                { header: 'Items', key: 'items', width: 50 },
+                { header: 'Total (THB)', key: 'total', width: 12 },
+                { header: 'Status', key: 'status', width: 12 },
+                { header: 'Created At', key: 'createdAt', width: 25 }
+            ];
+            worksheet.getRow(1).font = { bold: true };
+            worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+        }
+    } else {
+        const worksheet = workbook.addWorksheet('Orders');
+        worksheet.columns = [
+            { header: 'ID', key: 'id', width: 35 },
+            { header: 'Customer Name', key: 'name', width: 20 },
+            { header: 'Phone', key: 'phone', width: 20 },
+            { header: 'Communication', key: 'communication', width: 15 },
+            { header: 'Items', key: 'items', width: 50 },
+            { header: 'Total (THB)', key: 'total', width: 12 },
+            { header: 'Status', key: 'status', width: 12 },
+            { header: 'Created At', key: 'createdAt', width: 25 }
+        ];
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    }
+    return workbook;
+}
+
+async function addOrderToExcel(order) {
+    try {
+        const workbook = await initializeOrdersExcelFile();
+        const worksheet = workbook.getWorksheet('Orders');
+        if (!worksheet) return;
+        const itemsStr = formatOrderItemsForExcel(order.items);
+        worksheet.addRow({
+            id: order.id,
+            name: order.name || '',
+            phone: order.phone || '',
+            communication: order.communication || '',
+            items: itemsStr,
+            total: order.total || 0,
+            status: order.status || 'unconfirmed',
+            createdAt: order.createdAt || new Date().toISOString()
+        });
+        await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
+    } catch (e) {
+        console.error('Error adding order to Excel:', e);
+    }
+}
+
+async function updateOrderStatusInExcel(orderId, newStatus) {
+    try {
+        const workbook = await initializeOrdersExcelFile();
+        const worksheet = workbook.getWorksheet('Orders');
+        if (!worksheet) return;
+        let found = false;
+        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+            if (rowNumber === 1) return;
+            if (String(row.getCell(ORDERS_EXCEL_COLS.id).value) === orderId) {
+                row.getCell(ORDERS_EXCEL_COLS.status).value = newStatus;
+                found = true;
+            }
+        });
+        if (found) await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
+    } catch (e) {
+        console.error('Error updating order status in Excel:', e);
+    }
+}
+
+async function clearOrdersHistoryInExcel() {
+    try {
+        const workbook = await initializeOrdersExcelFile();
+        const worksheet = workbook.getWorksheet('Orders');
+        if (!worksheet) return;
+        const rowsToRemove = [];
+        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+            if (rowNumber === 1) return;
+            const status = String(row.getCell(ORDERS_EXCEL_COLS.status).value || '');
+            if (status === 'completed' || status === 'declined') rowsToRemove.push(rowNumber);
+        });
+        for (let i = rowsToRemove.length - 1; i >= 0; i--) {
+            worksheet.spliceRows(rowsToRemove[i], 1);
+        }
+        await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
+    } catch (e) {
+        console.error('Error clearing orders history in Excel:', e);
+    }
+}
+
+async function migrateOrdersToExcel() {
+    if (fs.existsSync(FOOD_ORDERS_EXCEL_FILE)) return; // Excel already exists, skip migration
+    const data = readOrders();
+    if (!data.orders || data.orders.length === 0) return;
+    try {
+        const workbook = await initializeOrdersExcelFile();
+        const worksheet = workbook.getWorksheet('Orders');
+        if (!worksheet) return;
+        for (const order of data.orders) {
+            const itemsStr = formatOrderItemsForExcel(order.items);
+            worksheet.addRow({
+                id: order.id,
+                name: order.name || '',
+                phone: order.phone || '',
+                communication: order.communication || '',
+                items: itemsStr,
+                total: order.total || 0,
+                status: order.status || 'unconfirmed',
+                createdAt: order.createdAt || new Date().toISOString()
+            });
+        }
+        await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
+        console.log('Migrated', data.orders.length, 'orders to Excel');
+    } catch (e) {
+        console.error('Error migrating orders to Excel:', e);
+    }
 }
 
 function readOrderTelegramMessages() {
@@ -1660,6 +1817,7 @@ app.post('/api/order-food', (req, res) => {
         };
         data.orders.push(order);
         saveOrders(data);
+        addOrderToExcel(order).catch(e => console.error('Excel write error:', e));
         
         const commLabels = { phone: 'Phone call', whatsapp: 'WhatsApp', telegram: 'Telegram', line: 'Line' };
         const commLabel = commLabels[communication] || communication || '';
@@ -2169,4 +2327,6 @@ app.listen(PORT, () => {
     parseMenuFromExcel().then(items => {
         console.log(`Menu loaded: ${items.length} items`);
     });
+    // Migrate existing orders from JSON to Excel on first run
+    migrateOrdersToExcel().catch(e => console.error('Orders migration error:', e));
 });
