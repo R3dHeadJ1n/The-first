@@ -2033,10 +2033,10 @@ async function parseMenuFromExcel() {
             if (rowNumber === 1) return;
 
             try {
-                // Column C (index 3) = NAME (English only)
-                // Column S (index 19) = PRICE
-                const nameCell = row.getCell(3); // Column C
-                const priceCell = row.getCell(19); // Column S
+                // Column A (1) = Category, Column B (2) = Name, Column C (3) = Price
+                const categoryCell = row.getCell(1);
+                const nameCell = row.getCell(2);
+                const priceCell = row.getCell(3);
 
                 const name = nameCell.value;
                 const price = priceCell.value;
@@ -2046,9 +2046,10 @@ async function parseMenuFromExcel() {
                     return;
                 }
 
+                const category = (categoryCell.value && String(categoryCell.value).trim()) || 'Other';
+
                 // Extract English name (if there are multiple languages, take first/English part)
                 let englishName = String(name).trim();
-                // If name contains separators like "|" or "/", take first part (assuming English)
                 if (englishName.includes('|')) {
                     englishName = englishName.split('|')[0].trim();
                 }
@@ -2059,7 +2060,6 @@ async function parseMenuFromExcel() {
                 // Convert price to number
                 let priceNum = parseFloat(price);
                 if (isNaN(priceNum)) {
-                    // Try to extract number from string
                     const priceMatch = String(price).match(/[\d.]+/);
                     if (priceMatch) {
                         priceNum = parseFloat(priceMatch[0]);
@@ -2074,10 +2074,11 @@ async function parseMenuFromExcel() {
 
                 menuItems.push({
                     id: dishId,
+                    category,
                     name: englishName,
                     price: priceNum,
                     image: imagePath ? `/api/menu-images/${path.basename(imagePath)}` : null,
-                    rowNumber: rowNumber // Store for updating
+                    rowNumber: rowNumber
                 });
 
                 // Store dishId -> rowNumber mapping in image mappings file
@@ -2124,10 +2125,10 @@ async function updateMenuItemInExcel(dishId, newName, newPrice) {
             return { success: false, error: 'Dish row number not found. Please reload menu.' };
         }
 
-        // Update column C (name) and column S (price)
+        // Update column B (name) and column C (price)
         const row = worksheet.getRow(rowNumber);
-        row.getCell(3).value = newName;
-        row.getCell(19).value = newPrice;
+        row.getCell(2).value = newName;
+        row.getCell(3).value = newPrice;
 
         await workbook.xlsx.writeFile(MENU_FILE);
         return { success: true };
