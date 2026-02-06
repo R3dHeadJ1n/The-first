@@ -943,7 +943,7 @@ function initRoomGallery() {
         let singleExtIdx = 0;
         function trySingle() {
             const ext = IMAGE_EXTENSIONS[singleExtIdx];
-            const src = `single${i}.${ext}`;
+            const src = `images/single${i}.${ext}`;
             singleImg.src = src;
             singleImg.alt = `single room ${i}`;
             singleImg.onload = () => {
@@ -968,7 +968,7 @@ function initRoomGallery() {
         let doubleExtIdx = 0;
         function tryDouble() {
             const ext = IMAGE_EXTENSIONS[doubleExtIdx];
-            const src = `double${i}.${ext}`;
+            const src = `images/double${i}.${ext}`;
             doubleImg.src = src;
             doubleImg.alt = `double room ${i}`;
             doubleImg.onload = () => {

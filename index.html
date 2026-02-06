@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant & Hotel</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&display=swap" rel="stylesheet">
@@ -112,13 +112,13 @@
 
     <!-- Logo in top left -->
     <div class="logo">
-        <img src="logo.png" alt="Restaurant & Hotel Logo" class="logo-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <img src="images/logo.png" alt="Restaurant & Hotel Logo" class="logo-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
         <div class="logo-placeholder" style="display: none;">LOGO</div>
     </div>
 
     <!-- Header pic - logo/name centered at top -->
     <div class="header-pic">
-        <img src="HeaderPic.PNG" alt="Restaurant & Hotel" class="header-pic-image" onerror="this.style.display='none';">
+        <img src="images/HeaderPic.png" alt="Restaurant & Hotel" class="header-pic-image" onerror="this.style.display='none';">
     </div>
 
     <!-- Main content area -->
@@ -128,7 +128,7 @@
             <!-- Hotel block (left) - clickable -->
             <div class="feature-card hotel-card-clickable" onclick="openBookingModal()">
                 <div class="feature-card-image hotel-card">
-                    <img src="hotel1.png" alt="Hotel" class="card-image">
+                    <img src="images/hotel1.png" alt="Hotel" class="card-image">
                 </div>
                 <button class="btn btn-room" onclick="event.stopPropagation(); openBookingModal();" data-i18n="book_main">Book a Room</button>
             </div>
@@ -136,7 +136,7 @@
             <!-- Food block (right) -->
             <div class="feature-card">
                 <div class="feature-card-image food-card" onclick="window.open('menu.html', '_blank')" style="cursor: pointer;">
-                    <img src="food1.png" alt="Restaurant" class="card-image">
+                    <img src="images/food1.png" alt="Restaurant" class="card-image">
                 </div>
                 <button class="btn btn-food" onclick="window.open('menu.html', '_blank')" data-i18n="order_main">Order Food</button>
             </div>
@@ -166,10 +166,10 @@
         
         <!-- Social media icons -->
         <div class="social-media-buttons">
-            <a href="https://www.facebook.com/share/g/1AVyaTgDWr/?mibextid=wwXIfr" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><img src="icon1.png" alt="Facebook"></a>
-            <a href="https://maps.app.goo.gl/Yf5VQ3y5s8L6JVYv7?g_st=ic" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="Google Maps"><img src="icon2.png" alt="Google Maps"></a>
-            <a href="https://www.instagram.com/tom_yummy_bar?igsh=MWwya2hkMDlhcmlpMQ==" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><img src="icon3.png" alt="Instagram"></a>
-            <a href="https://www.tiktok.com/@tom.yummy.bar?_r=1&_t=ZS-93deJn5QJdp" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="icon4.png" alt="TikTok"></a>
+            <a href="https://www.facebook.com/share/g/1AVyaTgDWr/?mibextid=wwXIfr" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><img src="images/icon1.png" alt="Facebook"></a>
+            <a href="https://maps.app.goo.gl/Yf5VQ3y5s8L6JVYv7?g_st=ic" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="Google Maps"><img src="images/icon2.png" alt="Google Maps"></a>
+            <a href="https://www.instagram.com/tom_yummy_bar?igsh=MWwya2hkMDlhcmlpMQ==" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><img src="images/icon3.png" alt="Instagram"></a>
+            <a href="https://www.tiktok.com/@tom.yummy.bar?_r=1&_t=ZS-93deJn5QJdp" class="social-media-icon" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><img src="images/icon4.png" alt="TikTok"></a>
         </div>
     </section>
 
@@ -183,7 +183,7 @@
 
     <!-- Flatpickr JS -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
-    <script src="script.js"></script>
+    <script src="js/script.js"></script>
     
     <!-- Toast notifications -->
     <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
