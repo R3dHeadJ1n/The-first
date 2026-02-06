@@ -438,19 +438,20 @@
                 <select id="adminRoomSelect" required>
                     <option value="">-- Select Room --</option>
                     <optgroup label="Big Rooms">
-                        <option value="big-1">Big Room 1</option>
-                        <option value="big-2">Big Room 2</option>
-                        <option value="big-3">Big Room 3</option>
+                        <option value="21">Big Room 21</option>
+                        <option value="31">Big Room 31</option>
+                        <option value="41">Big Room 41</option>
                     </optgroup>
                     <optgroup label="Small Rooms">
-                        <option value="small-1">Small Room 1</option>
-                        <option value="small-2">Small Room 2</option>
-                        <option value="small-3">Small Room 3</option>
-                        <option value="small-4">Small Room 4</option>
-                        <option value="small-5">Small Room 5</option>
-                        <option value="small-6">Small Room 6</option>
-                        <option value="small-7">Small Room 7</option>
-                        <option value="small-8">Small Room 8</option>
+                        <option value="22">Small Room 22</option>
+                        <option value="23">Small Room 23</option>
+                        <option value="32">Small Room 32</option>
+                        <option value="33">Small Room 33</option>
+                        <option value="42">Small Room 42</option>
+                        <option value="43">Small Room 43</option>
+                        <option value="51">Small Room 51</option>
+                        <option value="52">Small Room 52</option>
+                        <option value="53">Small Room 53</option>
                     </optgroup>
                 </select>
             </div>
@@ -630,13 +631,12 @@
             return { nights, pricePerNight, total };
         }
 
-        // Format room name (big-1 -> BIG ROOM#1)
+        const BIG_ROOM_IDS = ['21', '31', '41'];
         function formatRoomName(roomId) {
             if (!roomId) return 'Unknown';
-            const parts = roomId.split('-');
-            const type = parts[0].toUpperCase();
-            const num = parts[1];
-            return `${type} ROOM#${num}`;
+            const id = String(roomId);
+            const type = BIG_ROOM_IDS.includes(id) ? 'Big' : 'Small';
+            return `${type} Room ${id}`;
         }
 
         // Load and display bookings
@@ -681,7 +681,7 @@
                 let bookingNumber = 1;
                 bookingsList.innerHTML = bookings.map(booking => {
                     const roomName = formatRoomName(booking.roomId);
-                    const roomType = booking.roomId ? (booking.roomId.startsWith('big-') ? 'big' : 'small') : booking.roomType || 'small';
+                    const roomType = booking.roomId ? (BIG_ROOM_IDS.includes(String(booking.roomId)) ? 'big' : 'small') : booking.roomType || 'small';
                     const checkInFormatted = formatDate(booking.checkIn);
                     const checkOutFormatted = formatDate(booking.checkOut);
                     const dateRange = checkInFormatted === checkOutFormatted 
@@ -833,10 +833,8 @@
                 } else {
                     roomSelect.innerHTML = '<option value="">-- Select Room --</option>' +
                         data.availableRooms.map(roomId => {
-                            const parts = roomId.split('-');
-                            const type = parts[0].toUpperCase();
-                            const num = parts[1];
-                            return `<option value="${roomId}">${type} ROOM #${num}</option>`;
+                            const name = formatRoomName(roomId);
+                            return `<option value="${roomId}">${name}</option>`;
                         }).join('');
                     document.getElementById('confirmRoomBtn').disabled = false;
                     console.log('Loaded', data.availableRooms.length, 'available rooms');

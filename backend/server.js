@@ -784,15 +784,37 @@ function getDatesBetween(checkIn, checkOut) {
     return dates;
 }
 
+async function getAvailableRooms(roomType, checkIn, checkOut) {
+    const allBookings = await readBookingsFromExcel();
+    const allRooms = ROOM_INVENTORY[roomType]?.rooms || [];
+    if (!allRooms.length) return [];
+    if (!allBookings?.length) return [...allRooms];
+    const dates = getDatesBetween(checkIn, checkOut);
+    const bookedRooms = new Set();
+    allBookings.forEach((b) => {
+        const status = b.status || 'active';
+        if (status === 'unconfirmed' || status === 'deleted') return;
+        if (!b.roomType || b.roomType !== roomType) return;
+        if (!b.checkIn || !b.checkOut) return;
+        const bookingDates = getDatesBetween(b.checkIn, b.checkOut);
+        const hasOverlap = dates.some(d => bookingDates.includes(d));
+        if (hasOverlap) {
+            if (b.roomId) bookedRooms.add(b.roomId);
+            else allRooms.forEach(r => bookedRooms.add(r));
+        }
+    });
+    return allRooms.filter(r => !bookedRooms.has(r));
+}
+
 // Room inventory configuration
 const ROOM_INVENTORY = {
     big: {
         total: 3,
-        rooms: ['big-1', 'big-2', 'big-3']
+        rooms: ['21', '31', '41']
     },
     small: {
-        total: 8,
-        rooms: ['small-1', 'small-2', 'small-3', 'small-4', 'small-5', 'small-6', 'small-7', 'small-8']
+        total: 9,
+        rooms: ['22', '23', '32', '33', '42', '43', '51', '52', '53']
     }
 };
 
@@ -803,8 +825,12 @@ const ROOM_CAPACITY = {
 };
 
 // Helper: Get room type from roomId
+const BIG_ROOM_IDS = ['21', '31', '41'];
 function getRoomTypeFromId(roomId) {
-    return roomId.startsWith('big-') ? 'big' : 'small';
+    const id = String(roomId);
+    if (BIG_ROOM_IDS.includes(id)) return 'big';
+    if (id.startsWith('big-')) return 'big';
+    return 'small';
 }
 
 // Room prices per night (Bath) - same as frontend
@@ -1012,8 +1038,9 @@ function updateTelegramBookingMessage(bookingId, newStatus) {
 // Telegram webhook: handle callback_query (Confirm/Delete buttons)
 app.post('/telegram-webhook', (req, res) => {
     res.status(200).send();
-    const cb = req.body?.callback_query;
-    if (cb) processTelegramCallback(cb);
+    const update = req.body;
+    if (update?.callback_query) processTelegramCallback(update.callback_query);
+    else if (update?.message?.text) processTelegramMessage(update.message);
 });
 
 function telegramApiRequest(method, body) {
@@ -1060,22 +1087,116 @@ function telegramApiRequestAsync(method, body) {
     });
 }
 
-function processTelegramCallback(cb) {
+async function processTelegramMessage(msg) {
+    const text = (msg?.text || '').trim();
+    const chatId = msg?.chat?.id;
+    if (!chatId || !TELEGRAM_ADMIN_CHAT_IDS.includes(String(chatId))) return;
+
+    if (text === '#bookings') {
+        const allBookings = await readBookingsFromExcel();
+        const activeBookings = allBookings.filter(b => (b.status || '') !== 'deleted');
+        if (activeBookings.length === 0) {
+            telegramApiRequest('sendMessage', { chat_id: chatId, text: 'No active bookings.' });
+            return;
+        }
+        const lines = ['📋 Active Bookings\n'];
+        activeBookings.sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+        activeBookings.forEach((b, i) => {
+            const roomTypeText = (b.roomType || '').toLowerCase() === 'big' ? 'Big room' : 'Small room';
+            const roomInfo = b.roomId ? ` · ${b.roomId}` : '';
+            const { nights, total } = calcNightsAndTotal(b.checkIn, b.checkOut, b.roomType || 'small');
+            const nameStr = [b.name, b.surname].filter(Boolean).join(' ') || '—';
+            const statusStr = b.status === 'confirmed' ? '✅' : b.status === 'unconfirmed' ? '⏳' : '';
+            lines.push(`${i + 1}. ${roomTypeText}${roomInfo} · ${b.checkIn} → ${b.checkOut}`);
+            lines.push(`   ${nameStr} · ${nights} nights · ${total} Bath ${statusStr}`);
+            lines.push('');
+        });
+        const reply = lines.join('\n').trim();
+        telegramApiRequest('sendMessage', { chat_id: chatId, text: reply });
+    } else if (text === '#unconfirm') {
+        const allBookings = await readBookingsFromExcel();
+        const unconfirmed = allBookings.filter(b => (b.status || '') === 'unconfirmed');
+        if (unconfirmed.length === 0) {
+            telegramApiRequest('sendMessage', { chat_id: chatId, text: 'No bookings waiting for confirmation.' });
+            return;
+        }
+        const lines = ['⏳ Bookings Waiting for Confirmation\n'];
+        unconfirmed.sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+        unconfirmed.forEach((b, i) => {
+            const roomTypeText = (b.roomType || '').toLowerCase() === 'big' ? 'Big room' : 'Small room';
+            const { nights, total } = calcNightsAndTotal(b.checkIn, b.checkOut, b.roomType || 'small');
+            const nameStr = [b.name, b.surname].filter(Boolean).join(' ') || '—';
+            lines.push(`${i + 1}. ${roomTypeText} · ${b.checkIn} → ${b.checkOut}`);
+            lines.push(`   ${nameStr} · ${nights} nights · ${total} Bath`);
+            lines.push(`   Phone: ${b.phone || '—'}`);
+            lines.push('');
+        });
+        const reply = lines.join('\n').trim();
+        telegramApiRequest('sendMessage', { chat_id: chatId, text: reply });
+    }
+}
+
+async function processTelegramCallback(cb) {
     const chatId = cb.message?.chat?.id;
     if (!TELEGRAM_ADMIN_CHAT_IDS.includes(String(chatId))) {
         telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Not authorized' });
         return;
     }
     const data = String(cb.data || '');
-    const [action, bookingId] = data.split(':');
-    if (!bookingId || !['confirm', 'delete'].includes(action)) return;
+    const parts = data.split(':');
+    const action = parts[0];
+    const bookingId = parts[1];
+    const roomId = parts[2];
 
-    const newStatus = action === 'confirm' ? 'confirmed' : 'deleted';
-    updateBookingStatus(bookingId, newStatus).then((success) => {
-        const statusText = success ? `Status: ${newStatus}` : 'Update failed';
+    if (!bookingId) return;
+
+    if (action === 'confirm') {
+        const allBookings = await readBookingsFromExcel();
+        const booking = allBookings.find(b => b.id === bookingId);
+        if (!booking || !booking.roomType || !booking.checkIn || !booking.checkOut) {
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Booking not found' });
+            return;
+        }
+        const availableRooms = await getAvailableRooms(booking.roomType, booking.checkIn, booking.checkOut);
+        if (availableRooms.length === 0) {
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'No rooms available' });
+            return;
+        }
+        const roomButtons = availableRooms.map(r => ({ text: r, callback_data: `room:${bookingId}:${r}` }));
+        const keyboard = [];
+        for (let i = 0; i < roomButtons.length; i += 2) {
+            keyboard.push(roomButtons.slice(i, i + 2));
+        }
+        keyboard.push([{ text: '❌ Cancel', callback_data: `cancel:${bookingId}` }]);
+        telegramApiRequest('editMessageText', {
+            chat_id: chatId,
+            message_id: cb.message.message_id,
+            text: (cb.message.text || '') + '\n\n🏠 Choose room:',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id });
+        return;
+    }
+
+    if (action === 'cancel') {
+        const baseText = (cb.message.text || '').replace(/\n\n🏠 Choose room:.*$/, '').trim();
+        telegramApiRequest('editMessageText', {
+            chat_id: chatId,
+            message_id: cb.message.message_id,
+            text: baseText,
+            reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: `confirm:${bookingId}` }, { text: '❌ Delete', callback_data: `delete:${bookingId}` }]] }
+        });
+        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id });
+        return;
+    }
+
+    if (action === 'room' && roomId) {
+        const success = await updateBookingStatus(bookingId, 'confirmed', roomId);
+        const statusText = success ? `Status: confirmed (${roomId})` : 'Update failed';
         const msg = cb.message;
-        const emoji = (success && newStatus === 'confirmed') ? '✅' : '❌';
-        const newText = (msg.text || '') + '\n\n' + `${emoji} ${statusText}`;
+        const emoji = success ? '✅' : '❌';
+        const baseText = (msg.text || '').replace(/\n\n🏠 Choose room:[\s\S]*$/, '');
+        const newText = baseText + '\n\n' + `${emoji} ${statusText}`;
         telegramApiRequest('editMessageText', {
             chat_id: chatId,
             message_id: msg.message_id,
@@ -1084,9 +1205,30 @@ function processTelegramCallback(cb) {
         });
         telegramApiRequest('answerCallbackQuery', {
             callback_query_id: cb.id,
-            text: success ? `Booking ${newStatus}` : 'Failed to update'
+            text: success ? `Confirmed with ${roomId}` : 'Failed to update'
         });
-    });
+        return;
+    }
+
+    if (action === 'delete') {
+        const success = await updateBookingStatus(bookingId, 'deleted');
+        const statusText = success ? `Status: deleted` : 'Update failed';
+        const msg = cb.message;
+        const emoji = success ? '❌' : '❌';
+        const baseText = (msg.text || '').replace(/\n\n🏠 Choose room:[\s\S]*$/, '').replace(/\n\n[✅❌] Status: .+$/, '').trim();
+        const newText = baseText + '\n\n' + `${emoji} ${statusText}`;
+        telegramApiRequest('editMessageText', {
+            chat_id: chatId,
+            message_id: msg.message_id,
+            text: newText,
+            reply_markup: { inline_keyboard: [] }
+        });
+        telegramApiRequest('answerCallbackQuery', {
+            callback_query_id: cb.id,
+            text: success ? `Booking deleted` : 'Failed to update'
+        });
+        return;
+    }
 }
 
 function startTelegramPolling() {
@@ -1098,6 +1240,7 @@ function startTelegramPolling() {
             for (const u of r.result) {
                 offset = u.update_id + 1;
                 if (u.callback_query) processTelegramCallback(u.callback_query);
+                else if (u.message?.text) processTelegramMessage(u.message);
             }
         } catch (e) { /* ignore */ }
     };
