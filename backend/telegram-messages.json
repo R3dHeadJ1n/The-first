@@ -283,5 +283,20 @@
     "chatId": "747453534",
     "messageId": 146,
     "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-13\nCheck-out: 2026-02-20\nNights: 7\nPrice per night: 700 Bath\nTotal: 4900 Bath\nGuests: 2\nName: sam\nSurname: Smith\nPhone: +79774378837"
+  },
+  "user-1770378256510-bsbthpkl7": {
+    "chatId": "747453534",
+    "messageId": 150,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-06\nCheck-out: 2026-02-14\nNights: 8\nPrice per night: 900 Bath\nTotal: 7200 Bath\nGuests: 2\nName: dsfgdgdfg\nSurname: dfgdfgdfg\nPhone: 234234"
+  },
+  "user-1770378294628-6kchi4o5j": {
+    "chatId": "747453534",
+    "messageId": 151,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-09\nCheck-out: 2026-02-21\nNights: 12\nPrice per night: 900 Bath\nTotal: 10800 Bath\nGuests: 2\nName: asdasd\nSurname: asdasd\nPhone: 123"
+  },
+  "user-1770378473586-0kvom660j": {
+    "chatId": "747453534",
+    "messageId": 152,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-18\nCheck-out: 2026-02-21\nNights: 3\nPrice per night: 900 Bath\nTotal: 2700 Bath\nGuests: 2\nName: QWEQWE\nSurname: QWEQWE\nPhone: 123123"
   }
 }

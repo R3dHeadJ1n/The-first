@@ -98,6 +98,19 @@
             margin: 0;
         }
         
+        /* Menu page lang switcher (inline in header) */
+        .menu-lang-switcher {
+            position: relative;
+            top: auto;
+            right: auto;
+        }
+        .menu-lang-switcher .lang-btn {
+            width: auto;
+            min-width: 48px;
+            height: 36px;
+            font-size: 14px;
+        }
+        
         /* Shopping cart icon in header */
         .cart-icon-container {
             position: relative;
@@ -491,6 +504,15 @@
         <div class="menu-page-header">
             <h1 data-i18n="menu_title">Our Menu</h1>
             <div style="display: flex; align-items: center; gap: 15px;">
+                <!-- Language switcher -->
+                <div class="lang-switcher menu-lang-switcher" aria-label="Language selector">
+                    <button type="button" class="lang-btn" id="menuLangButton">ENG</button>
+                    <div class="lang-dropdown" id="menuLangDropdown">
+                        <button type="button" class="lang-option" data-lang="en">ENG</button>
+                        <button type="button" class="lang-option" data-lang="ru">RU</button>
+                        <button type="button" class="lang-option" data-lang="th">TH</button>
+                    </div>
+                </div>
                 <!-- Shopping Cart Icon -->
                 <div class="cart-icon-container" id="cartIconContainer" title="View Cart">
                     <svg class="cart-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -580,6 +602,18 @@
                 add_to_cart: 'Добавить в корзину',
                 view_cart: 'КОРЗИНА',
                 clear_cart: 'Очистить корзину'
+            },
+            th: {
+                menu_title: 'เมนูของเรา',
+                back_to_home: '← กลับหน้าแรก',
+                your_cart: 'ตะกร้าของคุณ',
+                cart_total: 'รวม:',
+                currency: 'THB',
+                loading_menu: 'กำลังโหลดเมนู...',
+                proceed_to_checkout: 'ดำเนินการชำระเงิน',
+                add_to_cart: 'เพิ่มลงตะกร้า',
+                view_cart: 'ดูตะกร้า',
+                clear_cart: 'ล้างตะกร้า'
             }
         };
         
@@ -588,7 +622,7 @@
         // Load saved language
         try {
             const saved = localStorage.getItem('selectedLanguage');
-            if (saved === 'en' || saved === 'ru') {
+            if (saved === 'en' || saved === 'ru' || saved === 'th') {
                 currentLang = saved;
             }
         } catch (e) {}
@@ -602,7 +636,44 @@
                 const key = el.getAttribute('data-i18n');
                 el.textContent = t(key);
             });
+            const menuLangBtn = document.getElementById('menuLangButton');
+            if (menuLangBtn) {
+                const labels = { en: 'ENG', ru: 'RU', th: 'TH' };
+                menuLangBtn.textContent = labels[currentLang] || currentLang.toUpperCase();
+            }
         }
+        
+        function setMenuLanguage(lang) {
+            if (!translations[lang]) return;
+            currentLang = lang;
+            try { localStorage.setItem('selectedLanguage', lang); } catch (e) {}
+            applyTranslations();
+            const sw = document.querySelector('.menu-lang-switcher');
+            if (sw) sw.classList.remove('open');
+        }
+        
+        // Menu lang switcher
+        const menuLangBtn = document.getElementById('menuLangButton');
+        const menuLangSwitcher = document.querySelector('.menu-lang-switcher');
+        if (menuLangBtn && menuLangSwitcher) {
+            const labels = { en: 'ENG', ru: 'RU', th: 'TH' };
+            menuLangBtn.textContent = labels[currentLang] || currentLang.toUpperCase();
+            menuLangBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menuLangSwitcher.classList.toggle('open');
+            });
+            document.querySelectorAll('.menu-lang-switcher .lang-option').forEach((opt) => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setMenuLanguage(opt.getAttribute('data-lang'));
+                });
+            });
+        }
+        document.addEventListener('click', (e) => {
+            if (menuLangSwitcher && !menuLangSwitcher.contains(e.target)) {
+                menuLangSwitcher.classList.remove('open');
+            }
+        });
         
         // Cart management
         const CART_STORAGE_KEY = 'foodCart';
@@ -1049,9 +1120,8 @@
             const itemCount = Object.keys(cart).length;
             
             if (itemCount === 0) {
-                const warningMsg = currentLang === 'ru' 
-                    ? 'Ваша корзина пуста. Пожалуйста, добавьте блюда в корзину.'
-                    : 'Your cart is empty. Please add items to your cart.';
+                const warningMsgs = { en: 'Your cart is empty. Please add items to your cart.', ru: 'Ваша корзина пуста. Пожалуйста, добавьте блюда в корзину.', th: 'ตะกร้าของคุณว่างเปล่า กรุณาเพิ่มรายการในตะกร้า' };
+                const warningMsg = warningMsgs[currentLang] || warningMsgs.en;
                 alert(warningMsg);
                 return;
             }
@@ -1075,9 +1145,8 @@
             const whatsappNumber = '66957084335';
             
             // Build order message
-            let messageText = currentLang === 'ru'
-                ? 'Здравствуйте! Я хотел бы заказать:\n'
-                : 'Hello! I would like to order:\n';
+            const orderGreetings = { en: 'Hello! I would like to order:\n', ru: 'Здравствуйте! Я хотел бы заказать:\n', th: 'สวัสดีครับ/ค่ะ! ฉันต้องการสั่งอาหาร:\n' };
+            let messageText = orderGreetings[currentLang] || orderGreetings.en;
             
             let total = 0;
             for (const dishId in cart) {
@@ -1086,9 +1155,8 @@
                 total += item.price * item.quantity;
             }
             
-            messageText += currentLang === 'ru'
-                ? `\nИтого: ${total.toFixed(2)} THB`
-                : `\nTotal: ${total.toFixed(2)} THB`;
+            const totalLabels = { en: `\nTotal: ${total.toFixed(2)} THB`, ru: `\nИтого: ${total.toFixed(2)} THB`, th: `\nรวม: ${total.toFixed(2)} THB` };
+            messageText += totalLabels[currentLang] || totalLabels.en;
             
             const message = encodeURIComponent(messageText);
             const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
@@ -1194,7 +1262,8 @@
                         e.stopPropagation();
                         const cart = getCart();
                         if (Object.keys(cart).length === 0) {
-                            const msg = currentLang === 'ru' ? 'Корзина пуста.' : 'Your cart is empty.';
+                            const emptyMsgs = { en: 'Your cart is empty.', ru: 'Корзина пуста.', th: 'ตะกร้าว่างเปล่า' };
+                            const msg = emptyMsgs[currentLang] || emptyMsgs.en;
                             alert(msg);
                             return;
                         }

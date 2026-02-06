@@ -132,38 +132,38 @@
 <body>
     <div class="checkout-page">
         <div class="checkout-container">
-            <a href="menu.html" class="checkout-back">&larr; Back to menu</a>
+            <a href="menu.html" class="checkout-back" data-i18n="back_to_menu">&larr; Back to menu</a>
 
             <div id="checkoutContent" class="checkout-card">
-                <h1>Checkout</h1>
+                <h1 data-i18n="checkout_title">Checkout</h1>
                 <div id="orderSummary" class="checkout-order-summary"></div>
                 <form id="checkoutForm" class="checkout-form" onsubmit="return false;">
                     <div class="form-group">
-                        <label for="checkoutName">Name</label>
-                        <input type="text" id="checkoutName" name="name" required placeholder="Your name">
+                        <label for="checkoutName" data-i18n="name_label">Name</label>
+                        <input type="text" id="checkoutName" name="name" required data-i18n-placeholder="name_placeholder">
                     </div>
                     <div class="form-group">
-                        <label for="checkoutPhone">Phone number</label>
-                        <input type="tel" id="checkoutPhone" name="phone" required placeholder="Your phone number">
+                        <label for="checkoutPhone" data-i18n="phone_label">Phone number</label>
+                        <input type="tel" id="checkoutPhone" name="phone" required data-i18n-placeholder="phone_placeholder">
                     </div>
                     <div class="form-group">
-                        <label for="checkoutCommunication">What type of communication do you prefer?</label>
+                        <label for="checkoutCommunication" data-i18n="communication_label">What type of communication do you prefer?</label>
                         <select id="checkoutCommunication" name="communication" required>
-                            <option value="" disabled selected>Select option</option>
-                            <option value="phone">Phone call</option>
+                            <option value="" disabled selected data-i18n="select_option">Select option</option>
+                            <option value="phone" data-i18n="comm_phone">Phone call</option>
                             <option value="whatsapp">WhatsApp</option>
                             <option value="telegram">Telegram</option>
                             <option value="line">Line</option>
                         </select>
                     </div>
-                    <p class="checkout-note">Thank you for your order. Our manager will contact you shortly to confirm the address and order details.</p>
-                    <button type="button" class="checkout-submit" id="checkoutSubmit">Order food</button>
+                    <p class="checkout-note" data-i18n="checkout_note">Thank you for your order. Our manager will contact you shortly to confirm the address and order details.</p>
+                    <button type="button" class="checkout-submit" id="checkoutSubmit" data-i18n="order_food">Order food</button>
                 </form>
             </div>
 
             <div id="checkoutEmpty" class="checkout-card checkout-empty" style="display: none;">
-                <p>Your cart is empty.</p>
-                <a href="menu.html" class="checkout-back">Go to menu</a>
+                <p data-i18n="cart_empty">Your cart is empty.</p>
+                <a href="menu.html" class="checkout-back" data-i18n="go_to_menu">Go to menu</a>
             </div>
         </div>
     </div>
@@ -171,6 +171,100 @@
     <script>
         const CART_STORAGE_KEY = 'foodCart';
         const BACKEND_URL = 'http://localhost:3001';
+
+        const translations = {
+            en: {
+                back_to_menu: '\u2190 Back to menu',
+                checkout_title: 'Checkout',
+                your_order: 'Your order',
+                total: 'Total',
+                name_label: 'Name',
+                name_placeholder: 'Your name',
+                phone_label: 'Phone number',
+                phone_placeholder: 'Your phone number',
+                communication_label: 'What type of communication do you prefer?',
+                select_option: 'Select option',
+                comm_phone: 'Phone call',
+                checkout_note: 'Thank you for your order. Our manager will contact you shortly to confirm the address and order details.',
+                order_food: 'Order food',
+                cart_empty: 'Your cart is empty.',
+                go_to_menu: 'Go to menu',
+                sending: 'Sending...',
+                alert_cart_empty: 'Your cart is empty.',
+                alert_fill_fields: 'Please fill in all fields.',
+                alert_order_failed: 'Order failed. Please try again.',
+                alert_connection_error: 'Failed to send order. Please check your connection and try again.'
+            },
+            ru: {
+                back_to_menu: '\u2190 Назад к меню',
+                checkout_title: 'Оформление заказа',
+                your_order: 'Ваш заказ',
+                total: 'Итого',
+                name_label: 'Имя',
+                name_placeholder: 'Введите имя',
+                phone_label: 'Номер телефона',
+                phone_placeholder: 'Введите номер телефона',
+                communication_label: 'Как предпочитаете связаться?',
+                select_option: 'Выберите вариант',
+                comm_phone: 'Телефонный звонок',
+                checkout_note: 'Спасибо за заказ. Наш менеджер скоро свяжется с вами для подтверждения адреса и деталей заказа.',
+                order_food: 'Заказать еду',
+                cart_empty: 'Ваша корзина пуста.',
+                go_to_menu: 'Перейти в меню',
+                sending: 'Отправка...',
+                alert_cart_empty: 'Ваша корзина пуста.',
+                alert_fill_fields: 'Пожалуйста, заполните все поля.',
+                alert_order_failed: 'Ошибка заказа. Попробуйте снова.',
+                alert_connection_error: 'Не удалось отправить заказ. Проверьте подключение к интернету.'
+            },
+            th: {
+                back_to_menu: '\u2190 กลับไปที่เมนู',
+                checkout_title: 'ชำระเงิน',
+                your_order: 'รายการสั่งซื้อของคุณ',
+                total: 'รวม',
+                name_label: 'ชื่อ',
+                name_placeholder: 'กรอกชื่อของคุณ',
+                phone_label: 'เบอร์โทรศัพท์',
+                phone_placeholder: 'กรอกเบอร์โทรศัพท์',
+                communication_label: 'ต้องการติดต่อทางใด?',
+                select_option: 'เลือกตัวเลือก',
+                comm_phone: 'โทรศัพท์',
+                checkout_note: 'ขอบคุณสำหรับคำสั่งซื้อ ผู้จัดการของเราจะติดต่อคุณในเร็วๆ นี้เพื่อยืนยันที่อยู่และรายละเอียด',
+                order_food: 'สั่งอาหาร',
+                cart_empty: 'ตะกร้าของคุณว่างเปล่า',
+                go_to_menu: 'ไปที่เมนู',
+                sending: 'กำลังส่ง...',
+                alert_cart_empty: 'ตะกร้าของคุณว่างเปล่า',
+                alert_fill_fields: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+                alert_order_failed: 'สั่งซื้อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+                alert_connection_error: 'ส่งคำสั่งซื้อไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อและลองอีกครั้ง'
+            }
+        };
+
+        let currentLang = 'en';
+        try {
+            const saved = localStorage.getItem('selectedLanguage');
+            if (saved && translations[saved]) currentLang = saved;
+        } catch (e) {}
+
+        function t(key) {
+            return (translations[currentLang] && translations[currentLang][key]) ? translations[currentLang][key] : key;
+        }
+
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (key) el.textContent = t(key);
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (key) el.setAttribute('placeholder', t(key));
+            });
+            const submitBtn = document.getElementById('checkoutSubmit');
+            if (submitBtn) submitBtn.textContent = t('order_food');
+        }
+
+        applyTranslations();
 
         function getCart() {
             try {
@@ -197,7 +291,7 @@
             contentEl.style.display = 'block';
             emptyEl.style.display = 'none';
 
-            let html = '<div class="checkout-order-summary-title">Your order</div>';
+            let html = '<div class="checkout-order-summary-title">' + t('your_order') + '</div>';
             let total = 0;
             for (const dishId in cart) {
                 const item = cart[dishId];
@@ -206,14 +300,14 @@
                 total += itemTotal;
                 html += `<div class="checkout-order-item"><span>${item.name} x${item.quantity}</span><span>${itemTotal.toFixed(2)} THB</span></div>`;
             }
-            html += `<div class="checkout-order-total">Total: ${total.toFixed(2)} THB</div>`;
+            html += `<div class="checkout-order-total">${t('total')}: ${total.toFixed(2)} THB</div>`;
             summaryEl.innerHTML = html;
         }
 
         async function submitOrder() {
             const cart = getCart();
             if (Object.keys(cart).length === 0) {
-                alert('Your cart is empty.');
+                alert(t('alert_cart_empty'));
                 return;
             }
 
@@ -221,7 +315,7 @@
             const phone = document.getElementById('checkoutPhone').value.trim();
             const communication = document.getElementById('checkoutCommunication').value;
             if (!name || !phone || !communication) {
-                alert('Please fill in all fields.');
+                alert(t('alert_fill_fields'));
                 return;
             }
 
@@ -233,7 +327,7 @@
 
             const submitBtn = document.getElementById('checkoutSubmit');
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Sending...';
+            submitBtn.textContent = t('sending');
 
             try {
                 const response = await fetch(`${BACKEND_URL}/api/order-food`, {
@@ -246,15 +340,15 @@
                     localStorage.removeItem(CART_STORAGE_KEY);
                     window.location.href = 'order-confirmed.html';
                 } else {
-                    alert(data.error || 'Order failed. Please try again.');
+                    alert(data.error || t('alert_order_failed'));
                     submitBtn.disabled = false;
-                    submitBtn.textContent = 'Order food';
+                    submitBtn.textContent = t('order_food');
                 }
             } catch (err) {
                 console.error('Order error:', err);
-                alert('Failed to send order. Please check your connection and try again.');
+                alert(t('alert_connection_error'));
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Order food';
+                submitBtn.textContent = t('order_food');
             }
         }
 
@@ -264,7 +358,7 @@
             const phone = document.getElementById('checkoutPhone').value.trim();
             const communication = document.getElementById('checkoutCommunication').value;
             if (!name || !phone || !communication) {
-                alert('Please fill in all fields.');
+                alert(t('alert_fill_fields'));
                 return;
             }
             submitOrder();

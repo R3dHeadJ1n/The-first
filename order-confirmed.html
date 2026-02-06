@@ -14,14 +14,49 @@
     <div class="booking-confirmed-page">
         <div class="booking-confirmed-card">
             <span class="booking-confirmed-icon" aria-hidden="true">✓</span>
-            <h1 class="booking-confirmed-title">Thank you for your order!</h1>
-            <p class="booking-confirmed-message">Our manager will contact you shortly to confirm the address and order details.</p>
+            <h1 class="booking-confirmed-title" data-i18n="order_thanks_title">Thank you for your order!</h1>
+            <p class="booking-confirmed-message" data-i18n="order_thanks_message">Our manager will contact you shortly to confirm the address and order details.</p>
             <div class="booking-confirmed-actions">
-                <a href="menu.html" class="btn btn-food">Back to menu</a>
-                <a href="index.html" class="btn btn-room">Back to main page</a>
+                <a href="menu.html" class="btn btn-food" data-i18n="back_to_menu">Back to menu</a>
+                <a href="index.html" class="btn btn-room" data-i18n="back_to_main">Back to main page</a>
             </div>
         </div>
     </div>
+    <script>
+    (function() {
+        var translations = {
+            en: {
+                order_thanks_title: 'Thank you for your order!',
+                order_thanks_message: 'Our manager will contact you shortly to confirm the address and order details.',
+                back_to_menu: 'Back to menu',
+                back_to_main: 'Back to main page'
+            },
+            ru: {
+                order_thanks_title: 'Спасибо за заказ!',
+                order_thanks_message: 'Наш менеджер скоро свяжется с вами для подтверждения адреса и деталей заказа.',
+                back_to_menu: 'Назад к меню',
+                back_to_main: 'На главную'
+            },
+            th: {
+                order_thanks_title: 'ขอบคุณสำหรับคำสั่งซื้อ!',
+                order_thanks_message: 'ผู้จัดการของเราจะติดต่อคุณในเร็วๆ นี้เพื่อยืนยันที่อยู่และรายละเอียด',
+                back_to_menu: 'กลับไปที่เมนู',
+                back_to_main: 'กลับหน้าแรก'
+            }
+        };
+        var lang = 'en';
+        try {
+            var saved = localStorage.getItem('selectedLanguage');
+            if (saved && translations[saved]) lang = saved;
+        } catch (e) {}
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+            var key = el.getAttribute('data-i18n');
+            if (translations[lang] && translations[lang][key]) {
+                el.textContent = translations[lang][key];
+            }
+        });
+    })();
+    </script>
     <script>
     (function() {
         var canvas = document.getElementById('fireworksCanvas');

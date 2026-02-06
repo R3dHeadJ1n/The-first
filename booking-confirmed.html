@@ -14,14 +14,49 @@
     <div class="booking-confirmed-page">
         <div class="booking-confirmed-card">
             <span class="booking-confirmed-icon" aria-hidden="true">✓</span>
-            <h1 class="booking-confirmed-title">Booking confirmed</h1>
-            <p class="booking-confirmed-message">We received your booking and will contact you via WhatsApp.</p>
+            <h1 class="booking-confirmed-title" data-i18n="booking_confirmed_title">Booking confirmed</h1>
+            <p class="booking-confirmed-message" data-i18n="booking_confirmed_message">We received your booking and will contact you via WhatsApp.</p>
             <div class="booking-confirmed-actions">
-                <a href="index.html" class="btn btn-room">Return to homepage</a>
-                <a href="menu.html" class="btn btn-food">Order food</a>
+                <a href="index.html" class="btn btn-room" data-i18n="return_homepage">Return to homepage</a>
+                <a href="menu.html" class="btn btn-food" data-i18n="order_food_btn">Order food</a>
             </div>
         </div>
     </div>
+    <script>
+    (function() {
+        var translations = {
+            en: {
+                booking_confirmed_title: 'Booking confirmed',
+                booking_confirmed_message: 'We received your booking and will contact you via WhatsApp.',
+                return_homepage: 'Return to homepage',
+                order_food_btn: 'Order food'
+            },
+            ru: {
+                booking_confirmed_title: 'Бронирование подтверждено',
+                booking_confirmed_message: 'Ваш номер забронирован. Мы свяжемся с вами в WhatsApp.',
+                return_homepage: 'Вернуться на главную',
+                order_food_btn: 'Заказать еду'
+            },
+            th: {
+                booking_confirmed_title: 'จองสำเร็จ',
+                booking_confirmed_message: 'ห้องพักของคุณได้รับการจองแล้ว เราจะติดต่อคุณทาง WhatsApp',
+                return_homepage: 'กลับหน้าแรก',
+                order_food_btn: 'สั่งอาหาร'
+            }
+        };
+        var lang = 'en';
+        try {
+            var saved = localStorage.getItem('selectedLanguage');
+            if (saved && translations[saved]) lang = saved;
+        } catch (e) {}
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+            var key = el.getAttribute('data-i18n');
+            if (translations[lang] && translations[lang][key]) {
+                el.textContent = translations[lang][key];
+            }
+        });
+    })();
+    </script>
     <script>
     (function() {
         var canvas = document.getElementById('fireworksCanvas');

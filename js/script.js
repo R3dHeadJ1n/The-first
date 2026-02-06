@@ -131,6 +131,70 @@ const translations = {
         err_phone_invalid: 'Введите корректный номер телефона',
         err_prefix: 'Пожалуйста, заполните все обязательные поля корректно:\\n\\n',
         no_availability: 'Нет доступных номеров на выбранные даты'
+    },
+    th: {
+        // Main buttons
+        book_main: 'จองห้อง',
+        order_main: 'สั่งอาหาร',
+        
+        // Scroll and rooms
+        scroll_text: 'เลื่อนลงเพื่อดูห้องพัก',
+        rooms_title: 'ห้องพักของเรา',
+        room_type_single: 'ห้องเดี่ยว',
+        room_type_double: 'ห้องคู่',
+        
+        // Menu
+        menu_title: 'เมนูของเรา',
+        prev_page: '← ก่อนหน้า',
+        next_page: 'ถัดไป →',
+        page: 'หน้า',
+        of: 'จาก',
+        order_food_whatsapp: 'สั่งอาหาร',
+
+        // Booking modal
+        booking_title: 'จองห้องพัก',
+        checkin_label: 'วันที่เช็คอิน',
+        checkout_label: 'วันที่เช็คเอาท์',
+        roomtype_label: 'ประเภทห้อง',
+        roomtype_placeholder: 'เลือกประเภทห้อง',
+        roomtype_small: 'ห้องเดี่ยว',
+        roomtype_big: 'ห้องคู่',
+        guests_label: 'จำนวนผู้เข้าพัก',
+        guests_placeholder: 'เลือกจำนวนผู้เข้าพัก',
+        guests_1: '1 ท่าน',
+        guests_2: '2 ท่าน',
+        guests_3: '3 ท่าน',
+        guests_4: '4 ท่าน',
+        name_label: 'ชื่อ',
+        name_placeholder: 'กรอกชื่อของคุณ',
+        surname_label: 'นามสกุล',
+        surname_placeholder: 'กรอกนามสกุลของคุณ',
+        phone_label: 'เบอร์โทรศัพท์',
+        phone_placeholder: 'กรอกเบอร์โทรศัพท์',
+        checkin_checkout_info: 'เช็คอินหลัง 14:00 น.; เช็คเอาท์ก่อน 12:00 น.',
+        nights_label: 'คืน:',
+        price_per_night_label: 'ราคาต่อคืน:',
+        total_price_label: 'รวม:',
+        currency: 'บาท',
+        book_submit: 'จองห้องพัก',
+
+        // Success modal
+        success_title: 'จองสำเร็จ!',
+        success_message: 'ห้องพักของคุณได้รับการจองแล้ว เราจะติดต่อคุณทาง WhatsApp',
+        close: 'ปิด',
+
+        // Validation messages
+        err_checkin_required: 'กรุณาระบุวันที่เช็คอิน',
+        err_checkout_required: 'กรุณาระบุวันที่เช็คเอาท์',
+        err_checkout_after: 'วันที่เช็คเอาท์ต้องอยู่หลังวันที่เช็คอิน',
+        err_roomtype_required: 'กรุณาเลือกประเภทห้อง',
+        err_guests_required: 'กรุณาเลือกจำนวนผู้เข้าพัก',
+        err_name_required: 'กรุณากรอกชื่อ',
+        err_surname_required: 'กรุณากรอกนามสกุล',
+        err_phone_required: 'กรุณากรอกเบอร์โทรศัพท์',
+        err_phone_invalid: 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง',
+        err_prefix: 'กรุณากรอกข้อมูลในช่องที่จำเป็นให้ครบถ้วน:\\n\\n',
+        no_availability: 'ไม่มีห้องว่างในวันที่เลือก'
     }
 };
 
@@ -165,7 +229,8 @@ function applyTranslations(lang) {
     // Update main language button text
     const langButton = document.getElementById('langButton');
     if (langButton) {
-        langButton.textContent = lang.toUpperCase() === 'RU' ? 'RU' : 'ENG';
+        const labels = { en: 'ENG', ru: 'RU', th: 'TH' };
+        langButton.textContent = labels[lang] || lang.toUpperCase();
     }
 
     // Update active option styling
@@ -746,7 +811,7 @@ function initializeLanguage() {
     let savedLang = 'en';
     try {
         const saved = localStorage.getItem('selectedLanguage');
-        if (saved === 'en' || saved === 'ru') {
+        if (saved === 'en' || saved === 'ru' || saved === 'th') {
             savedLang = saved;
         }
     } catch (e) {
