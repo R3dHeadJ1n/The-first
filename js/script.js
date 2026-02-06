@@ -221,7 +221,6 @@ const ROOM_PRICES = { small: 700, big: 900 };
 
 // Get modal elements
 const bookingModal = document.getElementById('bookingModal');
-const successModal = document.getElementById('successModal');
 const bookingForm = document.getElementById('bookingForm');
 const modalClose = document.querySelector('.modal-close');
 const bookRoomBtn = document.getElementById('bookRoomBtn');
@@ -553,79 +552,7 @@ function closeBookingModal() {
     document.body.style.overflow = ''; // Restore scrolling
 }
 
-// Open success modal
-function openSuccessModal() {
-    // Try to get the element if it wasn't found at page load
-    let modal = successModal || document.getElementById('successModal');
-    
-    if (!modal) {
-        console.error('❌ Success modal element not found! Showing alert instead.');
-        alert('Booking successful! We will contact you via WhatsApp.');
-        return;
-    }
-    
-    // Close booking modal first
-    if (bookingModal) {
-        bookingModal.classList.remove('show');
-    }
-    
-    // Small delay to ensure booking modal is closed before showing success
-    setTimeout(() => {
-        // Store opening time BEFORE showing (prevents immediate close)
-        modal.dataset.openedTime = Date.now().toString();
-        
-        // Show the modal using CSS class (avoid sticky inline styles)
-        modal.classList.add('show');
-        
-        document.body.style.overflow = 'hidden';
-        
-        // Auto-close after 5 seconds (5000ms) - give user time to read
-        setTimeout(() => {
-            closeSuccessModal();
-        }, 5000);
-    }, 100);
-}
-
-// Close success modal
-function closeSuccessModal() {
-    const modal = successModal || document.getElementById('successModal');
-    if (modal) {
-        modal.classList.remove('show');
-        // Ensure any old inline styles from previous versions don't keep it visible
-        modal.style.display = '';
-        modal.style.visibility = '';
-        modal.style.opacity = '';
-        modal.style.zIndex = '';
-    }
-    if (bookingModal) {
-        bookingModal.classList.remove('show');
-        bookingModal.style.display = '';
-    }
-    document.body.style.overflow = '';
-    // Reset form
-    bookingForm.reset();
-}
-
-// Close modal when clicking outside
-window.addEventListener('click', function(event) {
-    if (event.target === bookingModal) {
-        closeBookingModal();
-    }
-    // Only close success modal if clicking on the overlay (not the content)
-    // and the modal has been open for at least 500ms (prevents immediate close)
-    if (event.target === successModal && successModal.classList.contains('show')) {
-        const modalContent = successModal.querySelector('.modal-content');
-        if (modalContent && !modalContent.contains(event.target)) {
-            // Check if modal was just opened (prevent immediate close)
-            const openedTime = successModal.dataset.openedTime;
-            if (openedTime && Date.now() - parseInt(openedTime) > 500) {
-                closeSuccessModal();
-            }
-        }
-    }
-});
-
-// Close modal with X button
+// Close modal with X button only (no click-outside-to-close)
 if (modalClose) {
     modalClose.addEventListener('click', closeBookingModal);
 }
@@ -694,12 +621,12 @@ function handleBookingSubmit(event) {
         event.preventDefault();
     }
     
-    if (isSubmitting) {
-        return false;
-    }
+    if (isSubmitting) return false;
+    isSubmitting = true;
     
     const submitButton = bookRoomBtn || (bookingForm && bookingForm.querySelector('button[type="submit"]'));
     if (!submitButton) {
+        isSubmitting = false;
         return false;
     }
     
@@ -764,13 +691,10 @@ function handleBookingSubmit(event) {
     }
     
     if (!isValid) {
-        // Show validation errors
+        isSubmitting = false;
         alert(t('err_prefix') + errors.join('\n'));
         return false;
     }
-    
-    // Disable button and set loading state
-    isSubmitting = true;
     const originalText = submitButton.textContent;
     submitButton.disabled = true;
     submitButton.textContent = 'Submitting...';
@@ -788,12 +712,9 @@ function handleBookingSubmit(event) {
             submitButton.style.cursor = 'pointer';
             
             if (result && result.success) {
-                const successMsg = t('success_message');
-                persistToastForRefresh(successMsg, 'success');
-                showToast(successMsg, 'success', { durationMs: 7000 });
-
-                // Show success modal (it will close booking modal internally)
-                openSuccessModal();
+                if (bookingModal) bookingModal.classList.remove('show');
+                document.body.style.overflow = '';
+                window.open('booking-confirmed.html', '_blank');
             } else {
                 const errorMsg = result?.error || 'Failed to submit booking. Please try again.';
                 persistToastForRefresh(errorMsg, 'error');
@@ -996,9 +917,16 @@ function updateCurrentImageListAndOpen(src) {
 function updateCurrentImageList() {
     currentImageList = [];
     document.querySelectorAll(`#roomGallery .room-gallery-item[data-room-type="${currentRoomType}"] img`).forEach(img => {
-        if (img.src) {
-            const src = img.src.split('/').pop();
+        const src = img.getAttribute('src');
+        if (src) {
             currentImageList.push(src);
+        } else if (img.src) {
+            try {
+                const path = new URL(img.src).pathname;
+                currentImageList.push(path.startsWith('/') ? path : '/' + path);
+            } catch (_) {
+                currentImageList.push(img.src);
+            }
         }
     });
 }

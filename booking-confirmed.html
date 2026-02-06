@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Confirmed - Restaurant & Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body class="booking-confirmed-body">
+    <canvas id="fireworksCanvas" class="fireworks-canvas" aria-hidden="true"></canvas>
+    <div class="booking-confirmed-page">
+        <div class="booking-confirmed-card">
+            <span class="booking-confirmed-icon" aria-hidden="true">✓</span>
+            <h1 class="booking-confirmed-title">Booking confirmed</h1>
+            <p class="booking-confirmed-message">We received your booking and will contact you via WhatsApp.</p>
+            <div class="booking-confirmed-actions">
+                <a href="index.html" class="btn btn-room">Return to homepage</a>
+                <a href="menu.html" class="btn btn-food">Order food</a>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function() {
+        var canvas = document.getElementById('fireworksCanvas');
+        if (!canvas) return;
+        var ctx = canvas.getContext('2d');
+        var particles = [];
+        var colors = ['#668425', '#991305', '#f9ac41', '#b61918', '#ffd54f', '#4caf50', '#ffffff', '#ffe082'];
+        function resize() {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+        }
+
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+
+        function Particle(x, y, vx, vy, color, life) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.color = color;
+            this.life = life;
+            this.decay = 0.006 + Math.random() * 0.005;
+        }
+        Particle.prototype.update = function() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.15;
+            this.vx *= 0.98;
+            this.vy *= 0.98;
+            this.life -= this.decay;
+        };
+        Particle.prototype.draw = function() {
+            ctx.globalAlpha = this.life * 0.4;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = this.life;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        };
+
+        function burst(x, y) {
+            var count = 80 + Math.floor(Math.random() * 50);
+            var color = colors[Math.floor(Math.random() * colors.length)];
+            for (var i = 0; i < count; i++) {
+                var angle = (Math.PI * 2 * i / count) + Math.random() * 0.5;
+                var speed = 5 + Math.random() * 8;
+                particles.push(new Particle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, color, 1));
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (var i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+            burst(canvas.width * 0.5, canvas.height * 0.4);
+            setTimeout(function() { burst(canvas.width * 0.35, canvas.height * 0.5); }, 400);
+            setTimeout(function() { burst(canvas.width * 0.65, canvas.height * 0.45); }, 800);
+            setInterval(function() {
+                if (particles.length < 150) {
+                    burst(Math.random() * canvas.width, canvas.height * (0.3 + Math.random() * 0.4));
+                }
+            }, 2000);
+        }
+
+        if (document.readyState === 'complete') {
+            requestAnimationFrame(init);
+        } else {
+            window.addEventListener('load', function() { requestAnimationFrame(init); });
+        }
+    })();
+    </script>
+</body>
+</html>
