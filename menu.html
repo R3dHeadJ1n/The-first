@@ -528,7 +528,7 @@
                 </div>
                 <div class="cart-modal-actions">
                     <button class="cart-modal-clear-btn" id="cartModalClearBtn" data-i18n="clear_cart">Clear Cart</button>
-                    <button class="cart-modal-order-btn" id="cartModalOrderBtn" data-i18n="order_food_whatsapp">ORDER FOOD</button>
+                    <button class="cart-modal-order-btn" id="cartModalOrderBtn" data-i18n="proceed_to_checkout">Proceed to checkout</button>
                 </div>
             </div>
         </div>
@@ -564,7 +564,7 @@
                 cart_total: 'Total:',
                 currency: 'THB',
                 loading_menu: 'Loading menu...',
-                order_food_whatsapp: 'ORDER FOOD',
+                proceed_to_checkout: 'Proceed to checkout',
                 add_to_cart: 'Add to Cart',
                 view_cart: 'VIEW CART',
                 clear_cart: 'Clear Cart'
@@ -576,7 +576,7 @@
                 cart_total: 'Итого:',
                 currency: 'THB',
                 loading_menu: 'Загрузка меню...',
-                order_food_whatsapp: 'ЗАКАЗАТЬ ЕДУ',
+                proceed_to_checkout: 'Перейти к оформлению',
                 add_to_cart: 'Добавить в корзину',
                 view_cart: 'КОРЗИНА',
                 clear_cart: 'Очистить корзину'
@@ -1186,14 +1186,20 @@
                     });
                 }
                 
-                // Setup order button in cart modal
+                // Setup order button in cart modal - redirect to checkout
                 const cartModalOrderBtn = document.getElementById('cartModalOrderBtn');
                 if (cartModalOrderBtn) {
                     cartModalOrderBtn.addEventListener('click', function(e) {
                         e.preventDefault();
                         e.stopPropagation();
+                        const cart = getCart();
+                        if (Object.keys(cart).length === 0) {
+                            const msg = currentLang === 'ru' ? 'Корзина пуста.' : 'Your cart is empty.';
+                            alert(msg);
+                            return;
+                        }
                         closeCartModal();
-                        openWhatsAppOrder();
+                        window.location.href = 'checkout.html';
                     });
                 }
                 

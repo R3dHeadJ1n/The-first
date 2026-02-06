@@ -59,6 +59,8 @@ const MENU_FILE = path.join(__dirname, 'menu.xlsx');
 const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
 const MENU_IMAGES_MAPPING_FILE = path.join(__dirname, 'menu-images.json');
 const TELEGRAM_MESSAGES_FILE = path.join(__dirname, 'telegram-messages.json');
+const FOOD_ORDERS_FILE = path.join(__dirname, 'food-orders.json');
+const TELEGRAM_ORDER_MESSAGES_FILE = path.join(__dirname, 'telegram-order-messages.json');
 
 // Ensure menu images directory exists
 if (!fs.existsSync(MENU_IMAGES_DIR)) {
@@ -438,6 +440,9 @@ app.get('/admin-menu.html', (req, res) => {
 app.get('/menu.html', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'menu.html'));
 });
+app.get('/checkout.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'checkout.html'));
+});
 
 // Test endpoint to verify server is running
 app.get('/admin/test', (req, res) => {
@@ -611,6 +616,173 @@ app.get('/admin/unconfirmed-bookings', async (req, res) => {
         res.status(500).json({ error: 'Failed to read bookings from Excel' });
     }
 });
+
+// Orders API (admin)
+app.get('/admin/orders/unconfirmed', (req, res) => {
+    try {
+        const data = readOrders();
+        const list = data.orders.filter(o => o.status === 'unconfirmed');
+        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        res.json(list);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to load orders' });
+    }
+});
+
+app.get('/admin/orders/live', (req, res) => {
+    try {
+        const data = readOrders();
+        const list = data.orders.filter(o => o.status === 'live');
+        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        res.json(list);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to load orders' });
+    }
+});
+
+app.get('/admin/orders/all', (req, res) => {
+    try {
+        const data = readOrders();
+        const list = data.orders.filter(o => o.status === 'completed' || o.status === 'declined');
+        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        res.json(list);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to load orders' });
+    }
+});
+
+app.get('/admin/bookings/all', async (req, res) => {
+    try {
+        const allBookings = await readBookingsFromExcel();
+        allBookings.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        res.json(allBookings);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to load bookings' });
+    }
+});
+
+function updateOrderStatus(orderId, newStatus) {
+    const data = readOrders();
+    const order = data.orders.find(o => o.id === orderId);
+    if (!order) return false;
+    order.status = newStatus;
+    saveOrders(data);
+    return true;
+}
+
+function updateOrderTelegramMessage(orderId, newText, removeButtons = false) {
+    const m = readOrderTelegramMessages()[orderId];
+    if (!m || !m.chatId || !m.messageId) return;
+    const payload = { chat_id: m.chatId, message_id: m.messageId, text: newText };
+    if (removeButtons) payload.reply_markup = { inline_keyboard: [] };
+    telegramApiRequest('editMessageText', payload);
+}
+
+function updateOrderTelegramMessageWithComplete(orderId, newText) {
+    const m = readOrderTelegramMessages()[orderId];
+    if (!m || !m.chatId || !m.messageId) return;
+    telegramApiRequest('editMessageText', {
+        chat_id: m.chatId,
+        message_id: m.messageId,
+        text: newText,
+        reply_markup: { inline_keyboard: [[{ text: '✅ Complete', callback_data: `order_complete:${orderId}` }]] }
+    });
+}
+
+app.post('/admin/orders/:id/confirm', (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const ok = updateOrderStatus(orderId, 'live');
+        if (!ok) return res.status(404).json({ error: 'Order not found' });
+        const data = readOrders();
+        const order = data.orders.find(o => o.id === orderId);
+        const lines = formatOrderLines(order);
+        const newText = lines.join('\n') + '\n\n✅ Status: Order is being prepared';
+        updateOrderTelegramMessageWithComplete(orderId, newText);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to confirm order' });
+    }
+});
+
+app.post('/admin/orders/:id/decline', (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const data = readOrders();
+        const order = data.orders.find(o => o.id === orderId);
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        updateOrderStatus(orderId, 'declined');
+        const lines = formatOrderLines(order);
+        const newText = lines.join('\n') + '\n\n❌ Status: Declined';
+        updateOrderTelegramMessage(orderId, newText, true);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to decline order' });
+    }
+});
+
+app.post('/admin/orders/:id/complete', (req, res) => {
+    try {
+        const orderId = req.params.id;
+        const data = readOrders();
+        const order = data.orders.find(o => o.id === orderId);
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        updateOrderStatus(orderId, 'completed');
+        const lines = formatOrderLines(order);
+        const newText = lines.join('\n') + '\n\n✅ Status: Order completed';
+        updateOrderTelegramMessage(orderId, newText, true);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to complete order' });
+    }
+});
+
+app.post('/admin/clear-history', (req, res) => {
+    try {
+        const data = readOrders();
+        data.orders = data.orders.filter(o => o.status === 'unconfirmed' || o.status === 'live');
+        saveOrders(data);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to clear history' });
+    }
+});
+
+app.post('/admin/clear-bookings-history', async (req, res) => {
+    try {
+        const workbook = await initializeExcelFile();
+        const worksheet = workbook.getWorksheet('Bookings');
+        if (!worksheet) return res.status(500).json({ error: 'Worksheet not found' });
+        const rowsToRemove = [];
+        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+            if (rowNumber === 1) return;
+            const status = row.getCell(10).value;
+            if (status === 'deleted') rowsToRemove.push(rowNumber);
+        });
+        for (let i = rowsToRemove.length - 1; i >= 0; i--) {
+            worksheet.spliceRows(rowsToRemove[i], 1);
+        }
+        await workbook.xlsx.writeFile(BOOKINGS_FILE);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Clear bookings history error:', e);
+        res.status(500).json({ error: 'Failed to clear bookings history' });
+    }
+});
+
+function formatOrderLines(order) {
+    const lines = ['🍔 Order', ''];
+    if (order.name) lines.push(`Name: ${order.name}`);
+    if (order.phone) lines.push(`Phone: ${order.phone}`);
+    if (order.communication) lines.push(`Contact: ${order.communication}`);
+    if (order.name || order.phone || order.communication) lines.push('');
+    (order.items || []).forEach((item, i) => {
+        lines.push(`${item.quantity}x - ${i + 1}.${item.name}`);
+    });
+    lines.push('');
+    lines.push(`Total: ${(order.total || 0).toFixed(2)} THB`);
+    return lines;
+}
 
 // DELETE /admin/booking/:id - Mark booking as deleted (red row) instead of removing
 app.delete('/admin/booking/:id', async (req, res) => {
@@ -968,6 +1140,37 @@ function saveTelegramMessage(bookingId, chatId, messageId, text) {
     fs.writeFileSync(TELEGRAM_MESSAGES_FILE, JSON.stringify(m, null, 2));
 }
 
+// Food orders storage - { orders: [{ id, items, total, name, phone, communication, status, createdAt }] }
+// status: 'unconfirmed' | 'live' | 'completed' | 'declined'
+function readOrders() {
+    try {
+        if (fs.existsSync(FOOD_ORDERS_FILE)) {
+            const d = JSON.parse(fs.readFileSync(FOOD_ORDERS_FILE, 'utf8'));
+            return { orders: Array.isArray(d.orders) ? d.orders : [] };
+        }
+    } catch (e) { /* ignore */ }
+    return { orders: [] };
+}
+
+function saveOrders(data) {
+    fs.writeFileSync(FOOD_ORDERS_FILE, JSON.stringify(data, null, 2));
+}
+
+function readOrderTelegramMessages() {
+    try {
+        if (fs.existsSync(TELEGRAM_ORDER_MESSAGES_FILE)) {
+            return JSON.parse(fs.readFileSync(TELEGRAM_ORDER_MESSAGES_FILE, 'utf8'));
+        }
+    } catch (e) { /* ignore */ }
+    return {};
+}
+
+function saveOrderTelegramMessage(orderId, chatId, messageId) {
+    const m = readOrderTelegramMessages();
+    m[orderId] = { chatId, messageId };
+    fs.writeFileSync(TELEGRAM_ORDER_MESSAGES_FILE, JSON.stringify(m, null, 2));
+}
+
 // Helper function to send Telegram message with inline Confirm/Delete buttons
 function sendTelegramMessage(roomType, checkIn, checkOut, guests, name, surname, phone, bookingId) {
     const roomTypeText = roomType === 'big' ? 'Big room' : 'Small room';
@@ -1133,6 +1336,65 @@ async function processTelegramMessage(msg) {
         });
         const reply = lines.join('\n').trim();
         telegramApiRequest('sendMessage', { chat_id: chatId, text: reply });
+    } else if (text === '#orders') {
+        const data = readOrders();
+        const live = data.orders.filter(o => o.status === 'live');
+        if (live.length === 0) {
+            telegramApiRequest('sendMessage', { chat_id: chatId, text: '🛒 No live orders.' });
+            return;
+        }
+        const lines = ['🛒 Live Orders\n'];
+        live.forEach((o, i) => {
+            lines.push(`${i + 1}. ${o.name || '—'} · ${o.phone || '—'}`);
+            (o.items || []).forEach(it => lines.push(`   ${it.quantity}x ${it.name}`));
+            lines.push(`   Total: ${(o.total || 0).toFixed(2)} THB`);
+            lines.push('');
+        });
+        telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
+    } else if (text === '#2confirm') {
+        const data = readOrders();
+        const unconfirmed = data.orders.filter(o => o.status === 'unconfirmed');
+        if (unconfirmed.length === 0) {
+            telegramApiRequest('sendMessage', { chat_id: chatId, text: '⏳ No orders waiting for confirmation.' });
+            return;
+        }
+        const lines = ['⏳ Orders to Confirm\n'];
+        unconfirmed.forEach((o, i) => {
+            lines.push(`${i + 1}. ${o.name || '—'} · ${o.phone || '—'}`);
+            (o.items || []).forEach(it => lines.push(`   ${it.quantity}x ${it.name}`));
+            lines.push(`   Total: ${(o.total || 0).toFixed(2)} THB · ID: ${o.id}`);
+            lines.push('');
+        });
+        telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
+    } else if (text === '#allorders') {
+        const data = readOrders();
+        const history = data.orders.filter(o => o.status === 'completed' || o.status === 'declined');
+        if (history.length === 0) {
+            telegramApiRequest('sendMessage', { chat_id: chatId, text: '📋 No order history.' });
+            return;
+        }
+        const lines = ['📋 All Orders History\n'];
+        history.slice(0, 20).forEach((o, i) => {
+            const st = o.status === 'completed' ? '✅' : '❌';
+            lines.push(`${i + 1}. ${st} ${o.name || '—'} · ${(o.total || 0).toFixed(2)} THB`);
+        });
+        if (history.length > 20) lines.push(`\n... and ${history.length - 20} more`);
+        telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
+    } else if (text === '#allbookings') {
+        const allBookings = await readBookingsFromExcel();
+        if (allBookings.length === 0) {
+            telegramApiRequest('sendMessage', { chat_id: chatId, text: '📋 No booking history.' });
+            return;
+        }
+        const lines = ['📋 All Bookings History\n'];
+        allBookings.slice(0, 20).forEach((b, i) => {
+            const roomTypeText = (b.roomType || '').toLowerCase() === 'big' ? 'Big' : 'Small';
+            const nameStr = [b.name, b.surname].filter(Boolean).join(' ') || '—';
+            const st = b.status === 'confirmed' ? '✅' : b.status === 'deleted' ? '❌' : '⏳';
+            lines.push(`${i + 1}. ${st} ${roomTypeText} · ${b.checkIn} · ${nameStr}`);
+        });
+        if (allBookings.length > 20) lines.push(`\n... and ${allBookings.length - 20} more`);
+        telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
     }
 }
 
@@ -1145,11 +1407,54 @@ async function processTelegramCallback(cb) {
     const data = String(cb.data || '');
     const parts = data.split(':');
     const action = parts[0];
-    const bookingId = parts[1];
+    const id = parts[1];
     const roomId = parts[2];
 
-    if (!bookingId) return;
+    if (!id) return;
 
+    // Order callbacks
+    if (action === 'order_confirm') {
+        const ok = updateOrderStatus(id, 'live');
+        const order = readOrders().orders.find(o => o.id === id);
+        if (ok && order) {
+            const lines = formatOrderLines(order);
+            const newText = lines.join('\n') + '\n\n✅ Status: Order is being prepared';
+            updateOrderTelegramMessageWithComplete(id, newText);
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order confirmed' });
+        } else {
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
+        }
+        return;
+    }
+    if (action === 'order_decline') {
+        const order = readOrders().orders.find(o => o.id === id);
+        if (order) {
+            updateOrderStatus(id, 'declined');
+            const lines = formatOrderLines(order);
+            const newText = lines.join('\n') + '\n\n❌ Status: Declined';
+            updateOrderTelegramMessage(id, newText, true);
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order declined' });
+        } else {
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
+        }
+        return;
+    }
+    if (action === 'order_complete') {
+        const order = readOrders().orders.find(o => o.id === id);
+        if (order) {
+            updateOrderStatus(id, 'completed');
+            const lines = formatOrderLines(order);
+            const newText = lines.join('\n') + '\n\n✅ Status: Order completed';
+            updateOrderTelegramMessage(id, newText, true);
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order completed' });
+        } else {
+            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
+        }
+        return;
+    }
+
+    // Booking callbacks
+    const bookingId = id;
     if (action === 'confirm') {
         const allBookings = await readBookingsFromExcel();
         const booking = allBookings.find(b => b.id === bookingId);
@@ -1248,8 +1553,8 @@ function startTelegramPolling() {
     setInterval(poll, 500);
 }
 
-// Helper function to send food order to Telegram
-function sendFoodOrderTelegramMessage(items, total) {
+// Helper function to send food order to Telegram with Confirm/Decline buttons
+function sendFoodOrderTelegramMessage(items, total, customerName, customerPhone, communication, orderId) {
     const now = new Date();
     const dateTimeStr = now.toLocaleString('en-GB', {
         year: 'numeric',
@@ -1262,6 +1567,10 @@ function sendFoodOrderTelegramMessage(items, total) {
     }).replace(/\//g, '-');
     
     let lines = ['🍔 New Order', ''];
+    if (customerName) lines.push(`Name: ${customerName}`);
+    if (customerPhone) lines.push(`Phone: ${customerPhone}`);
+    if (communication) lines.push(`Contact: ${communication}`);
+    if (customerName || customerPhone || communication) lines.push('');
     items.forEach((item, i) => {
         lines.push(`${item.quantity}x - ${i + 1}.${item.name}`);
     });
@@ -1272,10 +1581,18 @@ function sendFoodOrderTelegramMessage(items, total) {
     
     const message = lines.join('\n');
     
-    const data = JSON.stringify({
+    const payload = {
         chat_id: TELEGRAM_CHAT_ID,
         text: message
-    });
+    };
+    if (orderId) {
+        payload.reply_markup = {
+            inline_keyboard: [
+                [{ text: '✅ Confirm', callback_data: `order_confirm:${orderId}` }, { text: '❌ Decline', callback_data: `order_decline:${orderId}` }]
+            ]
+        };
+    }
+    const data = JSON.stringify(payload);
     
     const options = {
         method: 'POST',
@@ -1288,7 +1605,9 @@ function sendFoodOrderTelegramMessage(items, total) {
         res.on('end', () => {
             try {
                 const result = JSON.parse(responseData);
-                if (!result.ok) {
+                if (result.ok && orderId && result.result?.message_id) {
+                    saveOrderTelegramMessage(orderId, TELEGRAM_CHAT_ID, result.result.message_id);
+                } else if (!result.ok) {
                     console.log('Telegram food order API error:', result);
                 }
             } catch (e) {
@@ -1305,10 +1624,10 @@ function sendFoodOrderTelegramMessage(items, total) {
     req.end();
 }
 
-// POST /api/order-food - Receive order and send to Telegram
+// POST /api/order-food - Receive order, save with status unconfirmed, send to Telegram
 app.post('/api/order-food', (req, res) => {
     try {
-        const { items } = req.body;
+        const { items, name: customerName, phone: customerPhone, communication } = req.body;
         
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, error: 'Items array is required' });
@@ -1327,7 +1646,24 @@ app.post('/api/order-food', (req, res) => {
             return res.status(400).json({ success: false, error: 'No valid order items' });
         }
         
-        sendFoodOrderTelegramMessage(validItems, total);
+        const orderId = 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+        const data = readOrders();
+        const order = {
+            id: orderId,
+            items: validItems,
+            total,
+            name: customerName || '',
+            phone: customerPhone || '',
+            communication: communication || '',
+            status: 'unconfirmed',
+            createdAt: new Date().toISOString()
+        };
+        data.orders.push(order);
+        saveOrders(data);
+        
+        const commLabels = { phone: 'Phone call', whatsapp: 'WhatsApp', telegram: 'Telegram', line: 'Line' };
+        const commLabel = commLabels[communication] || communication || '';
+        sendFoodOrderTelegramMessage(validItems, total, customerName, customerPhone, commLabel, orderId);
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing food order:', error);

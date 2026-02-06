@@ -383,9 +383,26 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
+        .modal-history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-history-header h2 {
+            margin: 0;
+            text-align: left;
+        }
+        .modal-history-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .modal-history-actions .booking-delete-btn {
+            margin-left: 0;
+        }
         .close-modal {
             color: #aaa;
-            float: right;
             font-size: 28px;
             font-weight: bold;
             cursor: pointer;
@@ -425,6 +442,8 @@
                     <span class="status-text">Checking...</span>
                 </div>
                 <button class="btn" id="menuBtn" style="background-color: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">MENU</button>
+                <button class="btn" id="allBookingsBtn" style="background-color: #9c27b0; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">All Bookings</button>
+                <button class="btn" id="allOrdersBtn" style="background-color: #e91e63; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">All Orders</button>
                 <button class="restart-btn" id="restartBtn" style="background-color: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Restart Backend</button>
                 <button class="logout-btn" id="logoutBtn">Logout</button>
             </div>
@@ -486,6 +505,20 @@
             </div>
         </div>
 
+        <div class="admin-panel-section">
+            <h2>Unconfirmed Orders</h2>
+            <div id="unconfirmedOrdersList">
+                <div class="no-bookings">Loading...</div>
+            </div>
+        </div>
+
+        <div class="admin-panel-section">
+            <h2>Live Orders</h2>
+            <div id="liveOrdersList">
+                <div class="no-bookings">Loading...</div>
+            </div>
+        </div>
+
         <!-- Room Selection Modal -->
         <div id="roomSelectionModal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -512,6 +545,34 @@
             </div>
             <div id="bookingsList">
                 <div class="no-bookings">Loading bookings...</div>
+            </div>
+        </div>
+
+        <!-- All Bookings Modal -->
+        <div id="allBookingsModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+                <div class="modal-history-header">
+                    <h2>All Bookings History</h2>
+                    <div class="modal-history-actions">
+                        <button type="button" class="booking-delete-btn" onclick="clearBookingsHistory()">Clean History</button>
+                        <span class="close-modal" onclick="closeAllBookingsModal()">&times;</span>
+                    </div>
+                </div>
+                <div id="allBookingsList"></div>
+            </div>
+        </div>
+
+        <!-- All Orders Modal -->
+        <div id="allOrdersModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+                <div class="modal-history-header">
+                    <h2>All Orders History</h2>
+                    <div class="modal-history-actions">
+                        <button type="button" class="booking-delete-btn" onclick="clearOrdersHistory()">Clean History</button>
+                        <span class="close-modal" onclick="closeAllOrdersModal()">&times;</span>
+                    </div>
+                </div>
+                <div id="allOrdersList"></div>
             </div>
         </div>
     </div>
@@ -557,7 +618,10 @@
                 initAdminPanel();
                 loadBookings();
                 loadUnconfirmedBookings();
-                checkServerStatus(); // Check server status on load/refresh
+                loadUnconfirmedOrders();
+                loadLiveOrders();
+                checkServerStatus();
+                setInterval(() => { loadUnconfirmedOrders(); loadLiveOrders(); }, 10000);
             }, 100);
         }
 
@@ -967,6 +1031,192 @@
             }
         }
 
+        // Unconfirmed Orders (food)
+        async function loadUnconfirmedOrders() {
+            const el = document.getElementById('unconfirmedOrdersList');
+            if (!el) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/unconfirmed`);
+                const orders = await res.json();
+                if (orders.length === 0) {
+                    el.innerHTML = '<div class="no-bookings">No unconfirmed orders</div>';
+                    return;
+                }
+                el.innerHTML = orders.map(o => {
+                    const itemsStr = (o.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ');
+                    return `<div class="booking-item">
+                        <div class="booking-info">
+                            <strong>${o.name || '—'}</strong> · ${o.phone || '—'}<br>
+                            <span class="dates">${itemsStr}</span><br>
+                            <span>Total: ${(o.total || 0).toFixed(2)} THB · Contact: ${o.communication || '—'}</span>
+                        </div>
+                        <div class="booking-actions">
+                            <button class="booking-confirm-btn" onclick="confirmOrder('${o.id}')">Confirm</button>
+                            <button class="booking-delete-btn" onclick="declineOrder('${o.id}')">Decline</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                el.innerHTML = '<div class="no-bookings">Error loading orders</div>';
+            }
+        }
+
+        async function confirmOrder(orderId) {
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/confirm`, { method: 'POST' });
+                if (res.ok) {
+                    showAdminMessage('Order confirmed', 'success');
+                    loadUnconfirmedOrders();
+                    loadLiveOrders();
+                } else showAdminMessage('Failed to confirm', 'error');
+            } catch (e) {
+                showAdminMessage('Error', 'error');
+            }
+        }
+
+        async function declineOrder(orderId) {
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/decline`, { method: 'POST' });
+                if (res.ok) {
+                    showAdminMessage('Order declined', 'success');
+                    loadUnconfirmedOrders();
+                } else showAdminMessage('Failed to decline', 'error');
+            } catch (e) {
+                showAdminMessage('Error', 'error');
+            }
+        }
+
+        async function loadLiveOrders() {
+            const el = document.getElementById('liveOrdersList');
+            if (!el) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/live`);
+                const orders = await res.json();
+                if (orders.length === 0) {
+                    el.innerHTML = '<div class="no-bookings">No live orders</div>';
+                    return;
+                }
+                el.innerHTML = orders.map(o => {
+                    const itemsStr = (o.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ');
+                    return `<div class="booking-item">
+                        <div class="booking-info">
+                            <strong>${o.name || '—'}</strong> · ${o.phone || '—'}<br>
+                            <span class="dates">${itemsStr}</span><br>
+                            <span>Total: ${(o.total || 0).toFixed(2)} THB · Status: Order is being prepared</span>
+                        </div>
+                        <button class="booking-confirm-btn" onclick="completeOrder('${o.id}')">Complete</button>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                el.innerHTML = '<div class="no-bookings">Error loading orders</div>';
+            }
+        }
+
+        async function completeOrder(orderId) {
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/complete`, { method: 'POST' });
+                if (res.ok) {
+                    showAdminMessage('Order completed', 'success');
+                    loadLiveOrders();
+                } else showAdminMessage('Failed to complete', 'error');
+            } catch (e) {
+                showAdminMessage('Error', 'error');
+            }
+        }
+
+        async function openAllBookingsModal() {
+            document.getElementById('allBookingsModal').style.display = 'block';
+            const el = document.getElementById('allBookingsList');
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/bookings/all`);
+                const bookings = await res.json();
+                if (bookings.length === 0) {
+                    el.innerHTML = '<div class="no-bookings">No bookings</div>';
+                } else {
+                    el.innerHTML = bookings.map(b => {
+                        const roomTypeText = (b.roomType || '').toLowerCase() === 'big' ? 'Big Room' : 'Small Room';
+                        const nameStr = [b.name, b.surname].filter(Boolean).join(' ') || '—';
+                        const st = b.status === 'confirmed' ? '✅' : b.status === 'deleted' ? '❌' : '⏳';
+                        return `<div class="booking-item"><div class="booking-info">${st} ${roomTypeText} · ${b.checkIn} → ${b.checkOut} · ${nameStr}</div></div>`;
+                    }).join('');
+                }
+            } catch (e) {
+                el.innerHTML = '<div class="no-bookings">Error loading</div>';
+            }
+        }
+
+        function closeAllBookingsModal() {
+            document.getElementById('allBookingsModal').style.display = 'none';
+        }
+
+        async function openAllOrdersModal() {
+            document.getElementById('allOrdersModal').style.display = 'block';
+            const el = document.getElementById('allOrdersList');
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/all`);
+                const orders = await res.json();
+                if (orders.length === 0) {
+                    el.innerHTML = '<div class="no-bookings">No order history</div>';
+                } else {
+                    el.innerHTML = orders.map(o => {
+                        const st = o.status === 'completed' ? '✅' : '❌';
+                        const itemsStr = (o.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ');
+                        return `<div class="booking-item"><div class="booking-info">${st} ${o.name || '—'} · ${itemsStr} · ${(o.total || 0).toFixed(2)} THB</div></div>`;
+                    }).join('');
+                }
+            } catch (e) {
+                el.innerHTML = '<div class="no-bookings">Error loading</div>';
+            }
+        }
+
+        function closeAllOrdersModal() {
+            document.getElementById('allOrdersModal').style.display = 'none';
+        }
+
+        async function clearOrdersHistory() {
+            if (!confirm('Clear order history? (Completed and declined orders will be removed)')) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/clear-history`, { method: 'POST' });
+                if (res.ok) {
+                    showAdminMessage('Order history cleared', 'success');
+                    loadUnconfirmedOrders();
+                    loadLiveOrders();
+                    const el = document.getElementById('allOrdersList');
+                    el.innerHTML = '<div class="no-bookings">No order history</div>';
+                }
+            } catch (e) {
+                showAdminMessage('Error clearing history', 'error');
+            }
+        }
+
+        async function clearBookingsHistory() {
+            if (!confirm('Clear bookings history? This will remove all deleted bookings from the list.')) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/clear-bookings-history`, { method: 'POST' });
+                if (res.ok) {
+                    showAdminMessage('Bookings history cleared', 'success');
+                    loadBookings();
+                    const el = document.getElementById('allBookingsList');
+                    const res2 = await fetch(`${BACKEND_URL}/admin/bookings/all`);
+                    const bookings = await res2.json();
+                    if (bookings.length === 0) {
+                        el.innerHTML = '<div class="no-bookings">No bookings</div>';
+                    } else {
+                        el.innerHTML = bookings.map(b => {
+                            const roomTypeText = (b.roomType || '').toLowerCase() === 'big' ? 'Big Room' : 'Small Room';
+                            const nameStr = [b.name, b.surname].filter(Boolean).join(' ') || '—';
+                            const st = b.status === 'confirmed' ? '✅' : b.status === 'deleted' ? '❌' : '⏳';
+                            return `<div class="booking-item"><div class="booking-info">${st} ${roomTypeText} · ${b.checkIn} → ${b.checkOut} · ${nameStr}</div></div>`;
+                        }).join('');
+                    }
+                } else {
+                    showAdminMessage('Failed to clear', 'error');
+                }
+            } catch (e) {
+                showAdminMessage('Error clearing history', 'error');
+            }
+        }
+
         // Delete an unconfirmed booking
         async function deleteUnconfirmedBooking(bookingId) {
             if (!confirm('Are you sure you want to delete this unconfirmed booking?')) {
@@ -1259,14 +1509,17 @@
         const menuBtn = document.getElementById('menuBtn');
         if (menuBtn) {
             menuBtn.addEventListener('click', () => {
-                // Open in new tab - session cookies should be shared if same origin
                 const menuWindow = window.open(`${BACKEND_URL}/admin-menu.html`, '_blank');
-                // If window fails to open (popup blocked), fallback to same window
                 if (!menuWindow || menuWindow.closed || typeof menuWindow.closed === 'undefined') {
                     window.location.href = `${BACKEND_URL}/admin-menu.html`;
                 }
             });
         }
+
+        const allBookingsBtn = document.getElementById('allBookingsBtn');
+        if (allBookingsBtn) allBookingsBtn.addEventListener('click', openAllBookingsModal);
+        const allOrdersBtn = document.getElementById('allOrdersBtn');
+        if (allOrdersBtn) allOrdersBtn.addEventListener('click', openAllOrdersModal);
 
         // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {

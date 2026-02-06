@@ -273,5 +273,15 @@
     "chatId": "747453534",
     "messageId": 136,
     "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-10\nCheck-out: 2026-02-11\nNights: 1\nPrice per night: 700 Bath\nTotal: 700 Bath\nGuests: 2\nName: Kirill\nSurname: Kuzmani\nPhone: +66957349275"
+  },
+  "user-1770376141136-e1mb7y248": {
+    "chatId": "747453534",
+    "messageId": 145,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-09\nCheck-out: 2026-02-12\nNights: 3\nPrice per night: 900 Bath\nTotal: 2700 Bath\nGuests: 3\nName: sam\nSurname: Smith\nPhone: +79774378837"
+  },
+  "user-1770376185413-24qbbi233": {
+    "chatId": "747453534",
+    "messageId": 146,
+    "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-13\nCheck-out: 2026-02-20\nNights: 7\nPrice per night: 700 Bath\nTotal: 4900 Bath\nGuests: 2\nName: sam\nSurname: Smith\nPhone: +79774378837"
   }
 }
