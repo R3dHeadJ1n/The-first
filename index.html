@@ -91,19 +91,16 @@
         </div>
     </div>
 
-    <!-- Decorative background elements -->
-    </div>
-
-    <!-- Logo in top left -->
-    <div class="logo">
-        <img src="images/logo.png" alt="Restaurant & Hotel Logo" class="logo-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-        <div class="logo-placeholder" style="display: none;">LOGO</div>
-    </div>
-
-    <!-- Header pic - logo/name centered at top -->
-    <div class="header-pic">
-        <img src="images/HeaderPic.png" alt="Restaurant & Hotel" class="header-pic-image" onerror="this.style.display='none';">
-    </div>
+    <!-- Mobile header: logo left, HeaderPic center, lang switcher right -->
+    <header class="main-header">
+        <div class="logo">
+            <img src="/images/logo.png" alt="Restaurant & Hotel Logo" class="logo-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="logo-placeholder" style="display: none;">LOGO</div>
+        </div>
+        <div class="header-pic">
+            <img src="/images/HeaderPic.png" alt="Restaurant & Hotel" class="header-pic-image" onerror="this.style.display='none';">
+        </div>
+    </header>
 
     <!-- Main content area -->
     <div class="container main-section">
@@ -112,17 +109,17 @@
             <!-- Hotel block (left) - clickable -->
             <div class="feature-card hotel-card-clickable" onclick="openBookingModal()">
                 <div class="feature-card-image hotel-card">
-                    <img src="images/hotel1.png" alt="Hotel" class="card-image">
+                    <img src="/images/hotel1.png" alt="Hotel" class="card-image">
                 </div>
                 <button class="btn btn-room" onclick="event.stopPropagation(); openBookingModal();" data-i18n="book_main">Book a Room</button>
             </div>
             
             <!-- Food block (right) -->
             <div class="feature-card">
-                <div class="feature-card-image food-card" onclick="window.open('menu.html', '_blank')" style="cursor: pointer;">
-                    <img src="images/food1.png" alt="Restaurant" class="card-image">
+                <div class="feature-card-image food-card" onclick="window.location.href='menu.html'" style="cursor: pointer;">
+                    <img src="/images/food1.png" alt="Restaurant" class="card-image">
                 </div>
-                <button class="btn btn-food" onclick="window.open('menu.html', '_blank')" data-i18n="order_main">Order Food</button>
+                <button class="btn btn-food" onclick="window.location.href='menu.html'" data-i18n="order_main">Order Food</button>
             </div>
         </div>
         

@@ -121,12 +121,21 @@ body {
     white-space: nowrap;
 }
 
+/* Main header - desktop: absolute positioning; mobile: flex row */
+.main-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    pointer-events: none; /* Let clicks pass through to cards below */
+}
+
 /* Logo in top left */
 .logo {
     position: absolute;
     top: 15px;
     left: 30px;
-    z-index: 10;
 }
 
 .logo-image {
@@ -158,7 +167,6 @@ body {
     top: -160px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 10;
 }
 
 .header-pic-image {
@@ -332,7 +340,25 @@ body {
     transform: translateY(0);
 }
 
-/* Responsive design for smaller screens */
+/* Mobile/tablet: stack cards vertically */
+@media (max-width: 992px) {
+    .main-section .visual-section,
+    .visual-section {
+        flex-direction: column;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: center;
+    }
+    
+    .feature-card {
+        flex: 0 0 auto;
+        max-width: 100%;
+        width: 100%;
+        max-width: min(420px, 100%);
+    }
+}
+
+/* Responsive design - phones */
 @media (max-width: 768px) {
     .site-header-text {
         font-size: 24px;
@@ -342,35 +368,54 @@ body {
         max-width: 90%;
     }
     
+    /* Mobile header: logo left, HeaderPic center (big), lang right */
+    .main-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 12px;
+        padding-right: 60px; /* Space for lang switcher */
+    }
+    
     .logo {
-        top: 10px;
-        left: 20px;
+        position: static;
+        flex-shrink: 0;
     }
     
     .logo-image {
-        max-width: 300px;
+        max-width: 200px;
         max-height: 150px;
     }
     
     .header-pic {
-        top: 10px;
+        position: static;
+        transform: none;
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        padding: 0 8px;
     }
     
     .header-pic-image {
-        max-width: 280px;
-        max-height: 140px;
+        max-width: min(400px, 95vw);
+        max-height: 220px;
     }
     
     .logo-placeholder {
-        width: 100px;
-        height: 50px;
-        font-size: 16px;
+        width: 60px;
+        height: 40px;
+        font-size: 12px;
     }
     
+    .main-section,
+    .container {
+        padding-top: 240px !important;
+    }
+    
+    .main-section .visual-section,
     .visual-section {
-        gap: 40px;
-        flex-direction: column;
-        align-items: center;
+        gap: 20px;
+        margin-top: 24px;
     }
     
     .feature-card {
@@ -379,14 +424,77 @@ body {
     }
     
     .feature-card-image {
-        height: 220px;
+        height: 200px;
     }
     
     .feature-card .btn {
-        padding: 22px 24px;
+        padding: 18px 20px;
         font-size: 18px;
         letter-spacing: 0.1em;
+        min-height: 52px;
     }
+    
+    .lang-switcher {
+        top: 12px;
+        right: 12px;
+    }
+    
+    .lang-btn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    .main-header {
+        padding: 8px 10px;
+        padding-right: 54px;
+    }
+    
+    .logo-image {
+        max-width: 180px;
+        max-height: 135px;
+    }
+    
+    .header-pic-image {
+        max-width: min(360px, 92vw);
+        max-height: 200px;
+    }
+    
+    .main-section,
+    .container {
+        padding-top: 260px !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+    
+    .main-section .visual-section {
+        gap: 16px;
+        margin-top: 16px;
+    }
+    
+    .feature-card-image {
+        height: 180px;
+    }
+    
+    .feature-card .btn {
+        padding: 16px 20px;
+        font-size: 16px;
+        min-height: 48px;
+    }
+    
+    .lang-switcher {
+        top: 10px;
+        right: 10px;
+    }
+}
+
+/* Hide language switcher when Book a Room modal is open (all viewports) */
+body:has(.modal.show) .lang-switcher {
+    display: none;
 }
 
 /* Modal Styles */
