@@ -404,10 +404,12 @@ body {
     }
     
     .header-pic-image {
-        max-width: min(110vw, 52rem);
+        position: absolute;
+        
+        max-width: min(115vw, 40rem);
         width: 100%;
         height: auto;
-        object-fit: contain;
+        object-fit: scale-down;
         display: block;
     }
     
@@ -435,6 +437,7 @@ body {
     }
     
     .feature-card {
+        margin-top: 30px;
         max-width: 100%;
         width: 100%;
     }
