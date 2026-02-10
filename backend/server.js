@@ -2321,8 +2321,8 @@ app.use('/api/menu-images', express.static(MENU_IMAGES_DIR));
 app.use(express.static(path.join(__dirname, '..')));
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`Backend server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend server running on http://0.0.0.0:${PORT}`);
     startTelegramPolling();
     // Parse menu on startup
     parseMenuFromExcel().then(items => {

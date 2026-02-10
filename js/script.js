@@ -279,7 +279,7 @@ document.addEventListener('click', (e) => {
 });
 
 // Backend API Configuration
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = 'http://' + (typeof window !== 'undefined' ? window.location.hostname : 'localhost') + ':3001';
 
 // Room prices per night (Bath)
 const ROOM_PRICES = { small: 700, big: 900 };
