@@ -87,6 +87,54 @@ const upload = multer({
     }
 });
 
+const ALLOWED_BOOKING_STATUSES = ['unconfirmed', 'confirmed', 'deleted'];
+const ALLOWED_ORDER_STATUSES = ['unconfirmed', 'live', 'completed', 'deleted'];
+const ORDER_STATUS_ALIASES = { declined: 'deleted' };
+
+function normalizeBookingStatus(status, source = 'user', fallback) {
+    const isAdminSource = source === 'admin';
+    const defaultFallback = isAdminSource ? 'confirmed' : 'unconfirmed';
+    const effectiveFallback = fallback || defaultFallback;
+    if (status === undefined || status === null) {
+        return effectiveFallback;
+    }
+    const normalized = String(status).trim().toLowerCase();
+    if (!normalized) {
+        return effectiveFallback;
+    }
+    return ALLOWED_BOOKING_STATUSES.includes(normalized) ? normalized : effectiveFallback;
+}
+
+function ensureBookingStatus(status) {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (!ALLOWED_BOOKING_STATUSES.includes(normalized)) {
+        throw new Error(`Status must be one of: ${ALLOWED_BOOKING_STATUSES.join(', ')}`);
+    }
+    return normalized;
+}
+
+function normalizeOrderStatus(status, fallback = 'unconfirmed') {
+    if (status === undefined || status === null) {
+        return fallback;
+    }
+    const normalized = String(status).trim().toLowerCase();
+    if (!normalized) {
+        return fallback;
+    }
+    if (ORDER_STATUS_ALIASES[normalized]) {
+        return ORDER_STATUS_ALIASES[normalized];
+    }
+    return ALLOWED_ORDER_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function ensureOrderStatus(status) {
+    const normalized = normalizeOrderStatus(status);
+    if (!ALLOWED_ORDER_STATUSES.includes(normalized)) {
+        throw new Error(`Order status must be one of: ${ALLOWED_ORDER_STATUSES.join(', ')}`);
+    }
+    return normalized;
+}
+
 // Database helpers
 function formatDateOnly(value) {
     if (!value) return null;
@@ -95,19 +143,27 @@ function formatDateOnly(value) {
 }
 
 function mapBookingRow(row) {
+    const checkIn = formatDateOnly(row.checkin_date);
+    const checkOut = formatDateOnly(row.checkout_date);
+    let total = Number(row.total);
+    if (!Number.isFinite(total) && checkIn && checkOut && row.room_type) {
+        total = calcNightsAndTotal(checkIn, checkOut, row.room_type).total;
+    }
+    const normalizedStatus = normalizeBookingStatus(row.status, row.source === 'admin' ? 'admin' : 'user');
     return {
         id: row.public_id || `booking-${row.id}`,
         roomType: row.room_type,
         roomId: row.room_id ? String(row.room_id) : null,
-        checkIn: formatDateOnly(row.checkin_date),
-        checkOut: formatDateOnly(row.checkout_date),
+        checkIn,
+        checkOut,
         guests: row.guests,
         name: row.first_name || '',
         surname: row.last_name || '',
         phone: row.phone || '',
         source: row.source || 'user',
         createdAt: row.created_at ? row.created_at.toISOString() : null,
-        status: row.status || 'unconfirmed'
+        status: normalizedStatus,
+        total: total || 0
     };
 }
 
@@ -203,13 +259,13 @@ async function syncMenuImagesFromDisk() {
 }
 
 // Read all bookings from database (excluding deleted ones)
-async function readBookingsFromDb() {
+async function readBookingsFromDb(includeDeleted = false) {
     try {
         const result = await db.query(
             `SELECT id, public_id, room_type, room_id, checkin_date, checkout_date, guests,
-                    first_name, last_name, phone, status, source, created_at
+                    first_name, last_name, phone, status, source, created_at, total
              FROM bookings
-             WHERE status <> 'deleted'
+             ${includeDeleted ? '' : "WHERE status <> 'deleted'"}
              ORDER BY created_at DESC`
         );
         return result.rows.map(mapBookingRow);
@@ -241,44 +297,198 @@ async function insertBookingRecord(booking) {
         if (!['small', 'big'].includes(roomType)) {
             throw new Error('Invalid room type');
         }
-        if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) {
+
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+        if (
+            !checkIn ||
+            !checkOut ||
+            Number.isNaN(checkInDate.valueOf()) ||
+            Number.isNaN(checkOutDate.valueOf()) ||
+            checkOutDate <= checkInDate
+        ) {
             throw new Error('Invalid date range');
         }
+
         if (!guests || Number.isNaN(Number(guests))) {
             throw new Error('Invalid guests count');
         }
 
-        await db.query(
+        const checkInStr = checkInDate.toISOString().split('T')[0];
+        const checkOutStr = checkOutDate.toISOString().split('T')[0];
+        const { total } = calcNightsAndTotal(checkInStr, checkOutStr, roomType);
+
+        const finalStatus = normalizeBookingStatus(status, source);
+
+        const result = await db.query(
             `INSERT INTO bookings
              (public_id, room_type, room_id, checkin_date, checkout_date, guests,
-              first_name, last_name, phone, status, source, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+              first_name, last_name, phone, status, source, created_at, total)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             RETURNING *`,
             [
                 id,
                 roomType,
                 roomId ? String(roomId) : null,
-                checkIn,
-                checkOut,
+                checkInStr,
+                checkOutStr,
                 Number(guests),
                 name,
                 surname,
                 phone,
-                status,
+                finalStatus,
                 source,
-                createdAt
+                createdAt,
+                total
             ]
         );
 
-        return true;
+        const inserted = result.rows[0];
+        return inserted ? mapBookingRow(inserted) : null;
     } catch (error) {
         console.error('Error saving booking to database:', error);
-        return false;
+        return null;
+    }
+}
+
+async function updateBookingRecord(bookingId, updates = {}) {
+    try {
+        if (!bookingId || !updates || typeof updates !== 'object') return null;
+
+        const existingResult = await db.query(
+            `SELECT * FROM bookings WHERE public_id = $1`,
+            [bookingId]
+        );
+        const existingRow = existingResult.rows[0];
+        if (!existingRow) return null;
+
+        const fieldMap = {
+            roomType: 'room_type',
+            roomId: 'room_id',
+            checkIn: 'checkin_date',
+            checkOut: 'checkout_date',
+            guests: 'guests',
+            name: 'first_name',
+            surname: 'last_name',
+            phone: 'phone',
+            status: 'status'
+        };
+
+        const values = [];
+        const setParts = [];
+        const pushField = (dbField, value) => {
+            setParts.push(`${dbField} = $${values.length + 1}`);
+            values.push(value);
+        };
+
+        let totalNeedsUpdate = false;
+        let nextRoomType = existingRow.room_type;
+        let nextCheckIn = formatDateOnly(existingRow.checkin_date);
+        let nextCheckOut = formatDateOnly(existingRow.checkout_date);
+
+        if (typeof updates.roomType === 'string') {
+            const normalizedRoomType = updates.roomType.toLowerCase();
+            if (!['small', 'big'].includes(normalizedRoomType)) {
+                throw new Error('roomType must be "small" or "big"');
+            }
+            nextRoomType = normalizedRoomType;
+            pushField(fieldMap.roomType, normalizedRoomType);
+            totalNeedsUpdate = true;
+        }
+
+        if (updates.roomId !== undefined) {
+            pushField(fieldMap.roomId, updates.roomId ? String(updates.roomId) : null);
+        }
+
+        if (updates.checkIn) {
+            const checkInDate = new Date(updates.checkIn);
+            if (Number.isNaN(checkInDate.valueOf())) {
+                throw new Error('Invalid check-in date');
+            }
+            const formatted = checkInDate.toISOString().split('T')[0];
+            pushField(fieldMap.checkIn, formatted);
+            nextCheckIn = formatted;
+            totalNeedsUpdate = true;
+        }
+
+        if (updates.checkOut) {
+            const checkOutDate = new Date(updates.checkOut);
+            if (Number.isNaN(checkOutDate.valueOf())) {
+                throw new Error('Invalid check-out date');
+            }
+            const formatted = checkOutDate.toISOString().split('T')[0];
+            pushField(fieldMap.checkOut, formatted);
+            nextCheckOut = formatted;
+            totalNeedsUpdate = true;
+        }
+
+        if (updates.checkIn || updates.checkOut || totalNeedsUpdate) {
+            if (nextCheckIn && nextCheckOut) {
+                const start = new Date(nextCheckIn + 'T00:00:00');
+                const end = new Date(nextCheckOut + 'T00:00:00');
+                if (end <= start) {
+                    throw new Error('Check-out date must be after check-in date');
+                }
+            }
+        }
+
+        if (updates.guests !== undefined) {
+            const guestsNum = Number(updates.guests);
+            if (!Number.isFinite(guestsNum) || guestsNum <= 0) {
+                throw new Error('Guests must be a positive number');
+            }
+            pushField(fieldMap.guests, guestsNum);
+        }
+
+        if (typeof updates.name === 'string') {
+            pushField(fieldMap.name, updates.name.trim());
+        }
+
+        if (typeof updates.surname === 'string') {
+            pushField(fieldMap.surname, updates.surname.trim());
+        }
+
+        if (typeof updates.phone === 'string') {
+            pushField(fieldMap.phone, updates.phone.trim());
+        }
+
+        if (typeof updates.status === 'string') {
+            const normalizedStatus = ensureBookingStatus(updates.status);
+            pushField(fieldMap.status, normalizedStatus);
+        }
+
+        if (totalNeedsUpdate) {
+            if (!nextCheckIn || !nextCheckOut) {
+                throw new Error('Check-in and check-out dates are required to calculate total');
+            }
+            const { total } = calcNightsAndTotal(nextCheckIn, nextCheckOut, nextRoomType);
+            pushField('total', total);
+        }
+
+        if (setParts.length === 0) {
+            return mapBookingRow(existingRow);
+        }
+
+        values.push(bookingId);
+        const result = await db.query(
+            `UPDATE bookings
+             SET ${setParts.join(', ')}
+             WHERE public_id = $${values.length}
+             RETURNING *`,
+            values
+        );
+
+        return result.rows[0] ? mapBookingRow(result.rows[0]) : null;
+    } catch (error) {
+        console.error('Error updating booking:', error);
+        return null;
     }
 }
 
 // Update booking status (DB)
 async function updateBookingStatus(bookingId, newStatus, roomId = null) {
     try {
+        const normalizedStatus = ensureBookingStatus(newStatus);
         const query = `
             UPDATE bookings
             SET status = $2,
@@ -286,7 +496,7 @@ async function updateBookingStatus(bookingId, newStatus, roomId = null) {
             WHERE public_id = $1
             RETURNING public_id
         `;
-        const result = await db.query(query, [bookingId, newStatus, roomId]);
+        const result = await db.query(query, [bookingId, normalizedStatus, roomId]);
         return result.rowCount > 0;
     } catch (error) {
         console.error('Error updating booking status:', error);
@@ -522,8 +732,14 @@ app.get('/admin/orders/live', async (req, res) => {
 app.get('/admin/orders/all', async (req, res) => {
     try {
         const data = await readOrders();
-        const list = data.orders.filter(o => o.status === 'completed' || o.status === 'declined');
-        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        let list = data.orders;
+        const { status, includeDeleted } = req.query;
+        if (status) {
+            list = list.filter(o => (o.status || '').toLowerCase() === status.toLowerCase());
+        }
+        if (String(includeDeleted || '').toLowerCase() !== 'true') {
+            list = list.filter(o => (o.status || '').toLowerCase() !== 'deleted');
+        }
         res.json(list);
     } catch (e) {
         res.status(500).json({ error: 'Failed to load orders' });
@@ -532,7 +748,8 @@ app.get('/admin/orders/all', async (req, res) => {
 
 app.get('/admin/bookings/all', async (req, res) => {
     try {
-        const allBookings = await readBookingsFromDb();
+        const includeDeleted = String(req.query.includeDeleted || '').toLowerCase() === 'true';
+        const allBookings = await readBookingsFromDb(includeDeleted);
         allBookings.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         res.json(allBookings);
     } catch (e) {
@@ -540,11 +757,103 @@ app.get('/admin/bookings/all', async (req, res) => {
     }
 });
 
+app.post('/admin/bookings', async (req, res) => {
+    try {
+        const { roomType, roomId, checkIn, checkOut, guests, name, surname, phone, status } = req.body || {};
+        if (!roomType || !checkIn || !checkOut || !guests || !name || !surname || !phone) {
+            return res.status(400).json({ error: 'roomType, checkIn, checkOut, guests, name, surname, and phone are required' });
+        }
+
+        const normalizedRoomType = String(roomType).toLowerCase();
+        if (!['small', 'big'].includes(normalizedRoomType)) {
+            return res.status(400).json({ error: 'roomType must be "small" or "big"' });
+        }
+
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+        if (Number.isNaN(checkInDate.valueOf()) || Number.isNaN(checkOutDate.valueOf())) {
+            return res.status(400).json({ error: 'Invalid dates supplied' });
+        }
+        if (checkOutDate <= checkInDate) {
+            return res.status(400).json({ error: 'Check-out date must be after check-in date' });
+        }
+
+        const guestsCount = Number(guests);
+        if (!Number.isFinite(guestsCount) || guestsCount <= 0) {
+            return res.status(400).json({ error: 'Guests must be a positive number' });
+        }
+
+        const booking = {
+            id: `admin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            roomType: normalizedRoomType,
+            roomId: roomId ? String(roomId) : null,
+            checkIn: checkInDate.toISOString().split('T')[0],
+            checkOut: checkOutDate.toISOString().split('T')[0],
+            guests: guestsCount,
+            name: String(name).trim(),
+            surname: String(surname).trim(),
+            phone: String(phone).trim(),
+            source: 'admin',
+            createdAt: new Date().toISOString(),
+            status: normalizeBookingStatus(status, 'admin')
+        };
+
+        const created = await insertBookingRecord(booking);
+        if (!created) {
+            return res.status(500).json({ error: 'Failed to create booking' });
+        }
+        res.json({ success: true, booking: created });
+    } catch (error) {
+        console.error('Error creating admin booking record:', error);
+        res.status(500).json({ error: 'Failed to create booking' });
+    }
+});
+
+app.put('/admin/bookings/:id', async (req, res) => {
+    try {
+        const bookingId = req.params.id;
+        if (!bookingId) return res.status(400).json({ error: 'booking id is required' });
+
+        const allowedKeys = ['roomType', 'roomId', 'checkIn', 'checkOut', 'guests', 'name', 'surname', 'phone', 'status'];
+        const updates = {};
+        allowedKeys.forEach(key => {
+            if (req.body && Object.prototype.hasOwnProperty.call(req.body, key)) {
+                updates[key] = req.body[key];
+            }
+        });
+
+        const updated = await updateBookingRecord(bookingId, updates);
+        if (!updated) {
+            return res.status(404).json({ error: 'Booking not found or no changes applied' });
+        }
+        res.json({ success: true, booking: updated });
+    } catch (error) {
+        console.error('Error updating booking:', error);
+        res.status(500).json({ error: 'Failed to update booking' });
+    }
+});
+
+app.delete('/admin/bookings/:id', async (req, res) => {
+    try {
+        const bookingId = req.params.id;
+        if (!bookingId) return res.status(400).json({ error: 'booking id is required' });
+        const success = await markBookingAsDeleted(bookingId);
+        if (!success) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+        res.json({ success: true, message: 'Booking marked as deleted' });
+    } catch (error) {
+        console.error('Error deleting booking:', error);
+        res.status(500).json({ error: 'Failed to delete booking' });
+    }
+});
+
 async function updateOrderStatus(orderId, newStatus) {
     try {
+        const normalizedStatus = ensureOrderStatus(newStatus);
         const result = await db.query(
             `UPDATE orders SET status = $2 WHERE public_id = $1 RETURNING public_id`,
-            [orderId, newStatus]
+            [orderId, normalizedStatus]
         );
         return result.rowCount > 0;
     } catch (error) {
@@ -594,13 +903,13 @@ app.post('/admin/orders/:id/decline', async (req, res) => {
         const orderId = req.params.id;
         const order = await fetchOrderByPublicId(orderId);
         if (!order) return res.status(404).json({ error: 'Order not found' });
-        await updateOrderStatus(orderId, 'declined');
+        await updateOrderStatus(orderId, 'deleted');
         const lines = formatOrderLines(order);
-        const newText = lines.join('\n') + '\n\n🔴 Status: Declined';
+        const newText = lines.join('\n') + '\n\n🔴 Status: Deleted';
         updateOrderTelegramMessage(orderId, newText, true);
         res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ error: 'Failed to decline order' });
+        res.status(500).json({ error: 'Failed to delete order' });
     }
 });
 
@@ -616,6 +925,77 @@ app.post('/admin/orders/:id/complete', async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to complete order' });
+    }
+});
+
+app.post('/admin/orders', async (req, res) => {
+    try {
+        const { name, phone, communication, items = [], status } = req.body || {};
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'At least one item is required' });
+        }
+
+        const sanitizedItems = items
+            .filter(item => item && item.name && Number.isFinite(Number(item.quantity)) && Number.isFinite(Number(item.price)))
+            .map(item => ({
+                name: String(item.name).trim(),
+                quantity: Number(item.quantity),
+                price: Number(item.price)
+            }))
+            .filter(item => item.name && item.quantity > 0 && item.price >= 0);
+
+        if (sanitizedItems.length === 0) {
+            return res.status(400).json({ error: 'All items must include name, quantity (>0), and price (>=0)' });
+        }
+
+        const total = sanitizedItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+        const orderId = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+        await insertOrderWithItems({
+            id: orderId,
+            name: name || '',
+            phone: phone || '',
+            communication: communication || '',
+            items: sanitizedItems,
+            total,
+            status: status || 'unconfirmed'
+        });
+
+        const order = await fetchOrderByPublicId(orderId);
+        res.json({ success: true, order });
+    } catch (error) {
+        console.error('Error creating admin order:', error);
+        res.status(500).json({ error: 'Failed to create order' });
+    }
+});
+
+app.put('/admin/orders/:id', async (req, res) => {
+    try {
+        const orderId = req.params.id;
+        if (!orderId) return res.status(400).json({ error: 'order id is required' });
+        const updated = await updateOrderRecord(orderId, req.body || {});
+        if (!updated) {
+            return res.status(404).json({ error: 'Order not found or no changes applied' });
+        }
+        res.json({ success: true, order: updated });
+    } catch (error) {
+        console.error('Error updating order:', error);
+        res.status(500).json({ error: error.message || 'Failed to update order' });
+    }
+});
+
+app.delete('/admin/orders/:id', async (req, res) => {
+    try {
+        const orderId = req.params.id;
+        if (!orderId) return res.status(400).json({ error: 'order id is required' });
+        const updated = await updateOrderRecord(orderId, { status: 'deleted' });
+        if (!updated) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        res.json({ success: true, order: updated });
+    } catch (error) {
+        console.error('Error deleting order:', error);
+        res.status(500).json({ error: 'Failed to delete order' });
     }
 });
 
@@ -875,13 +1255,24 @@ function getRoomTypeFromId(roomId) {
 
 // Room prices per night (Bath) - same as frontend
 const ROOM_PRICES = { small: 700, big: 900 };
+const ROOM_MONTHLY_PRICES = { small: 16000, big: 19000 };
 
 function calcNightsAndTotal(checkIn, checkOut, roomType) {
     const start = new Date(checkIn + 'T00:00:00');
     const end = new Date(checkOut + 'T00:00:00');
     const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
     const pricePerNight = ROOM_PRICES[roomType] || 0;
-    const total = pricePerNight * nights;
+    let total = pricePerNight * nights;
+
+    const monthlyPrice = ROOM_MONTHLY_PRICES[roomType];
+    if (monthlyPrice) {
+        const fullMonths = Math.floor(nights / 30);
+        const remainingDays = nights % 30;
+        if (fullMonths > 0) {
+            total = (fullMonths * monthlyPrice) + (remainingDays * pricePerNight);
+        }
+    }
+
     return { nights, pricePerNight, total };
 }
 
@@ -1008,7 +1399,7 @@ function saveTelegramMessage(bookingId, chatId, messageId, text) {
 }
 
 // Food orders storage - { orders: [{ id, items, total, name, phone, communication, status, createdAt }] }
-// status: 'unconfirmed' | 'live' | 'completed' | 'declined'
+// status: 'unconfirmed' | 'live' | 'completed' | 'deleted'
 async function readOrders() {
     try {
         const result = await db.query(`
@@ -1045,7 +1436,7 @@ async function readOrders() {
                 name: row.customer_name || '',
                 phone: row.customer_phone || '',
                 communication: row.communication || '',
-                status: row.status,
+                status: normalizeOrderStatus(row.status),
                 createdAt: row.created_at ? row.created_at.toISOString() : null
             }))
         };
@@ -1092,14 +1483,15 @@ async function fetchOrderByPublicId(orderId) {
         name: row.customer_name || '',
         phone: row.customer_phone || '',
         communication: row.communication || '',
-        status: row.status,
+        status: normalizeOrderStatus(row.status),
         createdAt: row.created_at ? row.created_at.toISOString() : null
     };
 }
 
 async function clearOrdersHistoryInDb() {
     try {
-        await db.query(`DELETE FROM orders WHERE status IN ('completed', 'declined')`);
+        await db.query(`UPDATE orders SET status = 'deleted' WHERE status = 'declined'`);
+        await db.query(`DELETE FROM orders WHERE status IN ('completed', 'deleted')`);
         return true;
     } catch (error) {
         console.error('Failed to clear order history:', error);
@@ -1112,11 +1504,12 @@ async function insertOrderWithItems(orderPayload) {
     try {
         await client.query('BEGIN');
         const { id, name, phone, communication, items, total, status } = orderPayload;
+        const normalizedStatus = normalizeOrderStatus(status, 'unconfirmed');
         const orderResult = await client.query(
             `INSERT INTO orders (public_id, customer_name, customer_phone, communication, total, status)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id, public_id, created_at`,
-            [id, name || '', phone || '', communication || '', total, status || 'unconfirmed']
+            [id, name || '', phone || '', communication || '', total, normalizedStatus]
         );
         const orderDbId = orderResult.rows[0].id;
         for (const item of items) {
@@ -1134,6 +1527,99 @@ async function insertOrderWithItems(orderPayload) {
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;
+    } finally {
+        client.release();
+    }
+}
+
+async function updateOrderRecord(orderId, updates = {}) {
+    const client = await db.pool.connect();
+    try {
+        if (!orderId) return null;
+        await client.query('BEGIN');
+
+        const existingRes = await client.query('SELECT id FROM orders WHERE public_id = $1', [orderId]);
+        if (existingRes.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return null;
+        }
+        const orderDbId = existingRes.rows[0].id;
+
+        const setParts = [];
+        const values = [];
+        const pushField = (dbField, value) => {
+            setParts.push(`${dbField} = $${values.length + 1}`);
+            values.push(value);
+        };
+
+        if (typeof updates.name === 'string') {
+            pushField('customer_name', updates.name.trim());
+        }
+        if (typeof updates.phone === 'string') {
+            pushField('customer_phone', updates.phone.trim());
+        }
+        if (typeof updates.communication === 'string') {
+            pushField('communication', updates.communication.trim());
+        }
+        if (typeof updates.status === 'string') {
+            pushField('status', ensureOrderStatus(updates.status));
+        }
+
+        let itemsProvided = Array.isArray(updates.items);
+        let computedTotal = null;
+
+        if (itemsProvided) {
+            const sanitizedItems = updates.items
+                .filter(item => item && item.name && Number.isFinite(Number(item.quantity)) && Number.isFinite(Number(item.price)))
+                .map(item => ({
+                    name: String(item.name).trim(),
+                    quantity: Number(item.quantity),
+                    price: Number(item.price)
+                }))
+                .filter(item => item.name && item.quantity > 0 && item.price >= 0);
+
+            if (sanitizedItems.length === 0) {
+                throw new Error('Items array must include at least one valid item');
+            }
+
+            updates.items = sanitizedItems;
+            computedTotal = sanitizedItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+            pushField('total', computedTotal);
+        } else if (updates.total !== undefined) {
+            const totalNum = Number(updates.total);
+            if (!Number.isFinite(totalNum) || totalNum < 0) {
+                throw new Error('Total must be a non-negative number');
+            }
+            pushField('total', totalNum);
+        }
+
+        if (setParts.length > 0) {
+            values.push(orderId);
+            await client.query(
+                `UPDATE orders
+                 SET ${setParts.join(', ')}
+                 WHERE public_id = $${values.length}`,
+                values
+            );
+        }
+
+        if (itemsProvided) {
+            await client.query('DELETE FROM order_items WHERE order_id = $1', [orderDbId]);
+            for (const item of updates.items) {
+                await client.query(
+                    `INSERT INTO order_items (order_id, name, quantity, price)
+                     VALUES ($1, $2, $3, $4)`,
+                    [orderDbId, item.name, item.quantity, item.price]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        return await fetchOrderByPublicId(orderId);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error updating order:', error);
+        return null;
     } finally {
         client.release();
     }
@@ -1362,7 +1848,7 @@ async function processTelegramMessage(msg) {
         telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
     } else if (text === '#allorders') {
         const data = await readOrders();
-        const history = data.orders.filter(o => o.status === 'completed' || o.status === 'declined');
+        const history = data.orders.filter(o => o.status === 'completed' || o.status === 'deleted');
         if (history.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: '📋 No order history.' });
             return;
@@ -1427,11 +1913,11 @@ async function processTelegramCallback(cb) {
             telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
             return;
         }
-        await updateOrderStatus(orderId, 'declined');
+        await updateOrderStatus(orderId, 'deleted');
         const lines = formatOrderLines(order);
-        const newText = lines.join('\n') + '\n\n🔴 Status: Declined';
+        const newText = lines.join('\n') + '\n\n🔴 Status: Deleted';
         updateOrderTelegramMessage(orderId, newText, true);
-        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order declined' });
+        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order deleted' });
         return;
     }
     if (action === 'order_complete') {
@@ -1583,7 +2069,7 @@ function sendFoodOrderTelegramMessage(items, total, customerName, customerPhone,
     if (orderId) {
         payload.reply_markup = {
             inline_keyboard: [
-                [{ text: '✅ Confirm', callback_data: `order_confirm:${orderId}` }, { text: '❌ Decline', callback_data: `order_decline:${orderId}` }]
+                [{ text: '✅ Confirm', callback_data: `order_confirm:${orderId}` }, { text: '❌ Delete', callback_data: `order_decline:${orderId}` }]
             ]
         };
     }

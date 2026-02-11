@@ -45,6 +45,7 @@ const translations = {
         phone_placeholder: 'Enter your phone number',
         checkin_checkout_info: 'Check-in after 2:00 PM; Check-out before 12:00 PM',
         nights_label: 'Nights:',
+        price_per_month_label: 'Price per month:',
         price_per_night_label: 'Price per night:',
         total_price_label: 'Total:',
         currency: 'Bath',
@@ -109,6 +110,7 @@ const translations = {
         phone_placeholder: 'Введите номер телефона',
         checkin_checkout_info: 'Заезд после 14:00; Выезд до 12:00',
         nights_label: 'Ночей:',
+        price_per_month_label: 'Цена за месяц:',
         price_per_night_label: 'Цена за ночь:',
         total_price_label: 'Итого:',
         currency: 'Бат',
@@ -173,6 +175,7 @@ const translations = {
         phone_placeholder: 'กรอกเบอร์โทรศัพท์',
         checkin_checkout_info: 'เช็คอินหลัง 14:00 น.; เช็คเอาท์ก่อน 12:00 น.',
         nights_label: 'คืน:',
+        price_per_month_label: 'ราคาต่อเดือน:',
         price_per_night_label: 'ราคาต่อคืน:',
         total_price_label: 'รวม:',
         currency: 'บาท',
@@ -283,6 +286,7 @@ const BACKEND_URL = 'http://' + (typeof window !== 'undefined' ? window.location
 
 // Room prices per night (Bath)
 const ROOM_PRICES = { small: 700, big: 900 };
+const ROOM_MONTHLY_PRICES = { small: 16000, big: 19000 };
 
 // Get modal elements
 const bookingModal = document.getElementById('bookingModal');
@@ -533,6 +537,8 @@ function updateBookingSummary() {
     const summaryEl = document.getElementById('bookingSummary');
     const nightsEl = document.getElementById('nightsCount');
     const pricePerNightEl = document.getElementById('pricePerNight');
+    const pricePerMonthEl = document.getElementById('pricePerMonth');
+    const monthlyPriceRow = document.getElementById('monthlyPriceRow');
     const totalEl = document.getElementById('totalPrice');
     
     if (!summaryEl || !nightsEl || !pricePerNightEl || !totalEl) return;
@@ -543,6 +549,7 @@ function updateBookingSummary() {
     
     if (!roomType || !checkin || !checkout || !ROOM_PRICES[roomType]) {
         summaryEl.style.display = 'none';
+        if (monthlyPriceRow) monthlyPriceRow.style.display = 'none';
         return;
     }
     
@@ -552,11 +559,27 @@ function updateBookingSummary() {
     
     if (nights <= 0) {
         summaryEl.style.display = 'none';
+        if (monthlyPriceRow) monthlyPriceRow.style.display = 'none';
         return;
     }
     
     const pricePerNight = ROOM_PRICES[roomType];
-    const total = pricePerNight * nights;
+    let total = pricePerNight * nights;
+
+    const monthlyPrice = ROOM_MONTHLY_PRICES[roomType];
+    if (monthlyPrice) {
+        const fullMonths = Math.floor(nights / 30);
+        const remainingDays = nights % 30;
+        if (fullMonths > 0) {
+            total = (fullMonths * monthlyPrice) + (remainingDays * pricePerNight);
+        }
+        if (pricePerMonthEl && monthlyPriceRow) {
+            pricePerMonthEl.textContent = monthlyPrice.toLocaleString();
+            monthlyPriceRow.style.display = 'block';
+        }
+    } else if (monthlyPriceRow) {
+        monthlyPriceRow.style.display = 'none';
+    }
     
     nightsEl.textContent = nights;
     pricePerNightEl.textContent = pricePerNight.toLocaleString();

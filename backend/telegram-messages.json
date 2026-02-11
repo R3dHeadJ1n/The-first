@@ -308,5 +308,40 @@
     "chatId": "747453534",
     "messageId": 161,
     "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-14\nCheck-out: 2026-02-20\nNights: 6\nPrice per night: 700 Bath\nTotal: 4200 Bath\nGuests: 2\nName: Анна\nSurname: Москаленко\nPhone: +79295492600"
+  },
+  "user-1770805467116-c2m4hgnsf": {
+    "chatId": "747453534",
+    "messageId": 164,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-12\nCheck-out: 2026-02-21\nNights: 9\nPrice per night: 900 Bath\nTotal: 8100 Bath\nGuests: 3\nName: sdfsdf\nSurname: sdfsdf\nPhone: 234234"
+  },
+  "user-1770806383109-bisppaf71": {
+    "chatId": "747453534",
+    "messageId": 166,
+    "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-11\nCheck-out: 2026-02-14\nNights: 3\nPrice per night: 700 Bath\nTotal: 2100 Bath\nGuests: 2\nName: sdfsdf\nSurname: asdasd\nPhone: 123213"
+  },
+  "user-1770806677249-k5wwafdfi": {
+    "chatId": "747453534",
+    "messageId": 168,
+    "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-11\nCheck-out: 2026-02-14\nNights: 3\nPrice per night: 700 Bath\nTotal: 2100 Bath\nGuests: 2\nName: Анна\nSurname: Москаленко\nPhone: +79295492600"
+  },
+  "user-1770809783227-9sqt52gwo": {
+    "chatId": "747453534",
+    "messageId": 170,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-26\nCheck-out: 2026-04-03\nNights: 36\nPrice per night: 900 Bath\nTotal: 32400 Bath\nGuests: 2\nName: sdfsdf\nSurname: adsdf\nPhone: 12312"
+  },
+  "user-1770810406592-oy5lgg46d": {
+    "chatId": "747453534",
+    "messageId": 171,
+    "text": "📢 New Booking\nRoom: Big room\nCheck-in: 2026-02-11\nCheck-out: 2026-02-28\nNights: 17\nPrice per night: 900 Bath\nTotal: 15300 Bath\nGuests: 2\nName: Анна\nSurname: Москаленко\nPhone: +79295492600"
+  },
+  "user-1770811767356-495wlu048": {
+    "chatId": "747453534",
+    "messageId": 172,
+    "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-12\nCheck-out: 2026-02-28\nNights: 16\nPrice per night: 700 Bath\nTotal: 11200 Bath\nGuests: 1\nName: QWEQWE\nSurname: sdfsdf\nPhone: +79295492600"
+  },
+  "user-1770812987704-xpnyq8ptx": {
+    "chatId": "747453534",
+    "messageId": 174,
+    "text": "📢 New Booking\nRoom: Small room\nCheck-in: 2026-02-11\nCheck-out: 2026-02-13\nNights: 2\nPrice per night: 700 Bath\nTotal: 1400 Bath\nGuests: 2\nName: hhhh\nSurname: jjj\nPhone: 555"
   }
 }

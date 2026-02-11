@@ -6,10 +6,11 @@ CREATE TABLE IF NOT EXISTS bookings (
     checkin_date DATE NOT NULL,
     checkout_date DATE NOT NULL,
     guests INTEGER NOT NULL CHECK (guests > 0),
+    total INTEGER NOT NULL DEFAULT 0 CHECK (total >= 0),
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     phone VARCHAR(30) NOT NULL,
-    status VARCHAR(50) DEFAULT 'unconfirmed',
+    status VARCHAR(50) DEFAULT 'unconfirmed' CHECK (status IN ('unconfirmed','confirmed','deleted')),
     source VARCHAR(20) DEFAULT 'user',
     created_at TIMESTAMP DEFAULT NOW(),
     CHECK (checkout_date > checkin_date)
@@ -25,7 +26,7 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_phone VARCHAR(50),
     communication VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW(),
-    status VARCHAR(50) DEFAULT 'unconfirmed',
+    status VARCHAR(50) DEFAULT 'unconfirmed' CHECK (status IN ('unconfirmed','live','completed','deleted')),
     total INTEGER NOT NULL CHECK (total >= 0)
 );
 

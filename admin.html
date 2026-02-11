@@ -208,106 +208,6 @@
             background-color: #f57c00 !important;
         }
 
-        .bookings-list {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-top: 20px;
-        }
-
-        .bookings-list-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .bookings-list h2 {
-            color: #333;
-            margin: 0;
-        }
-
-        .booking-item {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .booking-info {
-            flex: 1;
-        }
-
-        .booking-info strong {
-            color: #333;
-            font-size: 16px;
-        }
-
-        .booking-info .room-name {
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        .booking-info .dates {
-            color: #666;
-            margin-top: 5px;
-        }
-
-        .booking-delete-btn {
-            padding: 8px 16px;
-            background-color: #f44336;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-left: 10px;
-        }
-
-        .booking-delete-btn:hover {
-            background-color: #da190b;
-        }
-
-        .booking-confirm-btn {
-            padding: 8px 16px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-
-        .booking-confirm-btn:hover {
-            background-color: #45a049;
-        }
-
-        .booking-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .unconfirmed-section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .unconfirmed-section-header h2 {
-            margin: 0;
-        }
-
-        .unconfirmed-header-buttons {
-            display: flex;
-            gap: 10px;
-        }
-
         .server-status {
             background-color: #f5f5f5;
             border: 1px solid #ddd;
@@ -358,6 +258,88 @@
             color: #999;
             padding: 20px;
         }
+
+        .unconfirmed-section {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .unconfirmed-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .unconfirmed-header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .booking-confirm-btn {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .booking-delete-btn {
+            padding: 8px 16px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .booking-item {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .booking-info {
+            flex: 1;
+        }
+
+        .booking-info strong {
+            color: #333;
+            font-size: 16px;
+        }
+
+        .booking-info .dates {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .booking-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .booking-card {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .booking-card strong { color: #333; font-size: 16px; }
+        .booking-card .muted { color: #666; font-size: 14px; }
 
         /* Modal styles */
         .modal {
@@ -449,55 +431,13 @@
             </div>
         </div>
         
-        <div class="admin-panel-section">
-            <h2>Manage Room Availability</h2>
-            
-            <div class="form-group">
-                <label for="adminRoomSelect">Select Room:</label>
-                <select id="adminRoomSelect" required>
-                    <option value="">-- Select Room --</option>
-                    <optgroup label="Big Rooms">
-                        <option value="21">Big Room 21</option>
-                        <option value="31">Big Room 31</option>
-                        <option value="41">Big Room 41</option>
-                    </optgroup>
-                    <optgroup label="Small Rooms">
-                        <option value="22">Small Room 22</option>
-                        <option value="23">Small Room 23</option>
-                        <option value="32">Small Room 32</option>
-                        <option value="33">Small Room 33</option>
-                        <option value="42">Small Room 42</option>
-                        <option value="43">Small Room 43</option>
-                        <option value="51">Small Room 51</option>
-                        <option value="52">Small Room 52</option>
-                        <option value="53">Small Room 53</option>
-                    </optgroup>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="adminCheckIn">Check-in Date:</label>
-                <input type="text" id="adminCheckIn" placeholder="Select check-in date" readonly>
-            </div>
-            
-            <div class="form-group">
-                <label for="adminCheckOut">Check-out Date:</label>
-                <input type="text" id="adminCheckOut" placeholder="Select check-out date" readonly>
-            </div>
-            
-            <div class="admin-buttons">
-                <button type="button" id="adminSaveBtn" class="btn">Mark as Unavailable</button>
-            </div>
-            
-            <div id="adminMessage" class="admin-message"></div>
-        </div>
-        
-        <div class="admin-panel-section">
+        <!-- Room Selection Modal -->
+        <div class="unconfirmed-section">
             <div class="unconfirmed-section-header">
                 <h2>Unconfirmed Bookings</h2>
                 <div class="unconfirmed-header-buttons" id="unconfirmedBulkButtons" style="display: none;">
                     <button type="button" class="booking-confirm-btn" onclick="confirmAllUnconfirmedBookings()">Confirm All</button>
-                    <button type="button" class="booking-delete-btn" onclick="deleteAllUnconfirmedBookings()">Delete All</button>
+                    <button type="button" class="booking-delete-btn" onclick="deleteAllUnconfirmedBookings()">Decline All</button>
                 </div>
             </div>
             <div id="unconfirmedBookingsList">
@@ -505,21 +445,6 @@
             </div>
         </div>
 
-        <div class="admin-panel-section">
-            <h2>Unconfirmed Orders</h2>
-            <div id="unconfirmedOrdersList">
-                <div class="no-bookings">Loading...</div>
-            </div>
-        </div>
-
-        <div class="admin-panel-section">
-            <h2>Live Orders</h2>
-            <div id="liveOrdersList">
-                <div class="no-bookings">Loading...</div>
-            </div>
-        </div>
-
-        <!-- Room Selection Modal -->
         <div id="roomSelectionModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <span class="close-modal">&times;</span>
@@ -537,44 +462,25 @@
                 </div>
             </div>
         </div>
+
+        <div class="unconfirmed-section">
+            <div class="unconfirmed-section-header">
+                <h2>Unconfirmed Orders</h2>
+            </div>
+            <div id="unconfirmedOrdersList">
+                <div class="no-bookings">Loading unconfirmed orders...</div>
+            </div>
+        </div>
+
+        <div class="unconfirmed-section">
+            <div class="unconfirmed-section-header">
+                <h2>Live Orders</h2>
+            </div>
+            <div id="liveOrdersList">
+                <div class="no-bookings">Loading live orders...</div>
+            </div>
+        </div>
         
-        <div class="bookings-list">
-            <div class="bookings-list-header">
-                <h2>All Admin Bookings</h2>
-                <button type="button" id="deleteAllAdminBtn" class="booking-delete-btn" onclick="deleteAllAdminBookings()" style="display: none;">Delete All</button>
-            </div>
-            <div id="bookingsList">
-                <div class="no-bookings">Loading bookings...</div>
-            </div>
-        </div>
-
-        <!-- All Bookings Modal -->
-        <div id="allBookingsModal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
-                <div class="modal-history-header">
-                    <h2>All Bookings History</h2>
-                    <div class="modal-history-actions">
-                        <button type="button" class="booking-delete-btn" onclick="clearBookingsHistory()">Clean History</button>
-                        <span class="close-modal" onclick="closeAllBookingsModal()">&times;</span>
-                    </div>
-                </div>
-                <div id="allBookingsList"></div>
-            </div>
-        </div>
-
-        <!-- All Orders Modal -->
-        <div id="allOrdersModal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
-                <div class="modal-history-header">
-                    <h2>All Orders History</h2>
-                    <div class="modal-history-actions">
-                        <button type="button" class="booking-delete-btn" onclick="clearOrdersHistory()">Clean History</button>
-                        <span class="close-modal" onclick="closeAllOrdersModal()">&times;</span>
-                    </div>
-                </div>
-                <div id="allOrdersList"></div>
-            </div>
-        </div>
     </div>
 
     <!-- Flatpickr JS -->
@@ -761,7 +667,7 @@
                                 <span class="dates">${dateRange}</span><br>
                                 <span class="dates">${[booking.name, booking.surname].filter(Boolean).join(' ') || '—'} · ${nights} nights · Total: ${total.toLocaleString()} Bath</span>
                             </div>
-                            <button class="booking-delete-btn" onclick="deleteBooking('${booking.id}')">Delete</button>
+                            <button class="booking-delete-btn" onclick="deleteBooking('${booking.id}')">Decline</button>
                         </div>
                     `;
                 }).join('');
@@ -1012,22 +918,22 @@
                 if (!response.ok) throw new Error('Failed to load bookings');
                 const bookings = await response.json();
                 if (bookings.length === 0) {
-                    showAdminMessage('No unconfirmed bookings to delete', 'error');
+                    showAdminMessage('No unconfirmed bookings to decline', 'error');
                     return;
                 }
-                if (!confirm(`Delete all ${bookings.length} unconfirmed booking(s)?`)) return;
+                if (!confirm(`Decline all ${bookings.length} unconfirmed booking(s)?`)) return;
 
-                let deleted = 0;
+                let declined = 0;
                 for (const booking of bookings) {
                     const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE' });
-                    if (delResp.ok) deleted++;
+                    if (delResp.ok) declined++;
                 }
-                showAdminMessage(`Deleted ${deleted} booking(s)`, 'success');
+                showAdminMessage(`Declined ${declined} booking(s)`, 'success');
                 loadUnconfirmedBookings();
                 loadBookings();
             } catch (error) {
                 console.error('Error deleting all:', error);
-                showAdminMessage('Error deleting bookings', 'error');
+                showAdminMessage('Error declining bookings', 'error');
             }
         }
 
@@ -1052,7 +958,7 @@
                         </div>
                         <div class="booking-actions">
                             <button class="booking-confirm-btn" onclick="confirmOrder('${o.id}')">Confirm</button>
-                            <button class="booking-delete-btn" onclick="declineOrder('${o.id}')">Decline</button>
+                            <button class="booking-delete-btn" onclick="declineOrder('${o.id}')">Delete</button>
                         </div>
                     </div>`;
                 }).join('');
@@ -1078,11 +984,11 @@
             try {
                 const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/decline`, { method: 'POST' });
                 if (res.ok) {
-                    showAdminMessage('Order declined', 'success');
+                    showAdminMessage('Order deleted', 'success');
                     loadUnconfirmedOrders();
-                } else showAdminMessage('Failed to decline', 'error');
+                } else showAdminMessage('Failed to delete', 'error');
             } catch (e) {
-                showAdminMessage('Error', 'error');
+                showAdminMessage('Error deleting order', 'error');
             }
         }
 
@@ -1153,15 +1059,23 @@
             document.getElementById('allOrdersModal').style.display = 'block';
             const el = document.getElementById('allOrdersList');
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/all`);
+                const res = await fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`);
                 const orders = await res.json();
                 if (orders.length === 0) {
                     el.innerHTML = '<div class="no-bookings">No order history</div>';
                 } else {
                     el.innerHTML = orders.map(o => {
-                        const st = o.status === 'completed' ? '✅' : '❌';
+                        const status = (o.status || '').toLowerCase();
+                        const st = status === 'completed'
+                            ? '✅'
+                            : status === 'deleted'
+                            ? '❌'
+                            : status === 'live'
+                            ? '🔥'
+                            : '⏳';
+                        const statusLabel = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
                         const itemsStr = (o.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ');
-                        return `<div class="booking-item"><div class="booking-info">${st} ${o.name || '—'} · ${itemsStr} · ${(o.total || 0).toFixed(2)} THB</div></div>`;
+                        return `<div class="booking-item"><div class="booking-info">${st} ${statusLabel} · ${o.name || '—'} · ${itemsStr} · ${(o.total || 0).toFixed(2)} THB</div></div>`;
                     }).join('');
                 }
             } catch (e) {
@@ -1174,7 +1088,7 @@
         }
 
         async function clearOrdersHistory() {
-            if (!confirm('Clear order history? (Completed and declined orders will be removed)')) return;
+            if (!confirm('Clear order history? (Completed and deleted orders will be removed)')) return;
             try {
                 const res = await fetch(`${BACKEND_URL}/admin/clear-history`, { method: 'POST' });
                 if (res.ok) {
@@ -1270,7 +1184,7 @@
 
         // Delete booking
         async function deleteBooking(bookingId) {
-            if (!confirm('Are you sure you want to delete this booking?')) {
+            if (!confirm('Are you sure you want to decline this booking?')) {
                 return;
             }
 
@@ -1281,15 +1195,15 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    showAdminMessage(data.message || 'Booking deleted successfully', 'success');
+                    showAdminMessage(data.message || 'Booking declined successfully', 'success');
                     loadBookings();
                 } else {
                     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                    showAdminMessage(errorData.error || 'Error deleting booking', 'error');
+                    showAdminMessage(errorData.error || 'Error declining booking', 'error');
                 }
             } catch (error) {
                 console.error('Error deleting booking:', error);
-                showAdminMessage('Error deleting booking', 'error');
+                showAdminMessage('Error declining booking', 'error');
             }
         }
 
@@ -1517,9 +1431,17 @@
         }
 
         const allBookingsBtn = document.getElementById('allBookingsBtn');
-        if (allBookingsBtn) allBookingsBtn.addEventListener('click', openAllBookingsModal);
+        if (allBookingsBtn) {
+            allBookingsBtn.addEventListener('click', () => {
+                window.location.href = `${BACKEND_URL}/admin-bookings.html`;
+            });
+        }
         const allOrdersBtn = document.getElementById('allOrdersBtn');
-        if (allOrdersBtn) allOrdersBtn.addEventListener('click', openAllOrdersModal);
+        if (allOrdersBtn) {
+            allOrdersBtn.addEventListener('click', () => {
+                window.location.href = `${BACKEND_URL}/admin-orders.html`;
+            });
+        }
 
         // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookings Manager</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-table-body">
+    <div class="admin-table-shell">
+        <header class="admin-table-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Bookings Manager</h1>
+                <p class="muted">Live bookings from PostgreSQL with quick editing tools</p>
+            </div>
+            <div class="header-actions">
+                <button class="ghost-btn" id="backToDashboard">← Back to dashboard</button>
+                <button class="primary-btn" id="addBookingBtn">+ New booking</button>
+            </div>
+        </header>
+
+        <section class="admin-table-toolbar">
+            <input type="search" id="bookingSearch" placeholder="Search by guest or phone">
+            <select id="bookingStatusFilter">
+                <option value="">All statuses</option>
+                <option value="unconfirmed">Unconfirmed</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="deleted">Deleted</option>
+            </select>
+            <select id="roomTypeFilter">
+                <option value="">All room types</option>
+                <option value="small">Small</option>
+                <option value="big">Big</option>
+            </select>
+            <input type="date" id="bookingDateFrom" aria-label="Check-in from">
+            <input type="date" id="bookingDateTo" aria-label="Check-in to">
+            <button class="ghost-btn" id="refreshBookingsBtn">Refresh</button>
+        </section>
+
+        <section class="admin-table-card">
+            <div class="table-scroll">
+                <table class="data-table" id="bookingsTable">
+                    <thead>
+                        <tr>
+                            <th>Guest</th>
+                            <th>Contact</th>
+                            <th>Room</th>
+                            <th>Dates</th>
+                            <th>Guests</th>
+                            <th>Total (Bath)</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="table-empty" id="bookingsEmpty">Loading bookings…</div>
+        </section>
+        <div id="tableToast" class="table-toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="admin-modal" id="bookingModal">
+        <div class="admin-modal-content">
+            <div class="modal-header">
+                <h2 id="bookingModalTitle">Add booking</h2>
+                <button class="ghost-btn" id="closeBookingModal">✕</button>
+            </div>
+            <form id="bookingForm" class="form-grid">
+                <input type="hidden" id="bookingId">
+                <label>
+                    First name
+                    <input type="text" id="bookingName" required>
+                </label>
+                <label>
+                    Surname
+                    <input type="text" id="bookingSurname" required>
+                </label>
+                <label>
+                    Phone
+                    <input type="tel" id="bookingPhone" required>
+                </label>
+                <label>
+                    Room type
+                    <select id="bookingRoomType" required>
+                        <option value="small">Small</option>
+                        <option value="big">Big</option>
+                    </select>
+                </label>
+                <label>
+                    Room ID (optional)
+                    <input type="text" id="bookingRoomId" placeholder="e.g. 21">
+                </label>
+                <label>
+                    Guests
+                    <input type="number" id="bookingGuests" min="1" step="1" required>
+                </label>
+                <label>
+                    Check-in
+                    <input type="date" id="bookingCheckIn" required>
+                </label>
+                <label>
+                    Check-out
+                    <input type="date" id="bookingCheckOut" required>
+                </label>
+                <label>
+                    Status
+                    <select id="bookingStatus">
+                        <option value="unconfirmed">Unconfirmed</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="deleted">Deleted</option>
+                    </select>
+                </label>
+                <div class="form-row span-2">
+                    <button type="submit" class="primary-btn" id="bookingSubmitBtn">Save booking</button>
+                    <button type="button" class="ghost-btn" id="bookingCancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://' + window.location.hostname + ':3001';
+        const AUTH_KEY = 'admin_authenticated';
+        const AUTH_TOKEN_KEY = 'admin_auth_token';
+        const bookingsTableBody = document.querySelector('#bookingsTable tbody');
+        const bookingsEmptyState = document.getElementById('bookingsEmpty');
+        const searchInput = document.getElementById('bookingSearch');
+        const statusFilter = document.getElementById('bookingStatusFilter');
+        const roomTypeFilter = document.getElementById('roomTypeFilter');
+        const bookingDateFrom = document.getElementById('bookingDateFrom');
+        const bookingDateTo = document.getElementById('bookingDateTo');
+        const toastEl = document.getElementById('tableToast');
+
+        const bookingModal = document.getElementById('bookingModal');
+        const bookingForm = document.getElementById('bookingForm');
+        const bookingIdInput = document.getElementById('bookingId');
+        const bookingModalTitle = document.getElementById('bookingModalTitle');
+        const bookingSubmitBtn = document.getElementById('bookingSubmitBtn');
+        const closeBookingModalBtn = document.getElementById('closeBookingModal');
+        const bookingCancelBtn = document.getElementById('bookingCancelBtn');
+
+        let bookingsCache = [];
+
+        init();
+
+        function init() {
+            document.getElementById('backToDashboard').addEventListener('click', () => {
+                window.location.href = `${BACKEND_URL}/admin.html`;
+            });
+            document.getElementById('refreshBookingsBtn').addEventListener('click', loadBookings);
+            document.getElementById('addBookingBtn').addEventListener('click', () => openBookingModal());
+            closeBookingModalBtn.addEventListener('click', closeBookingModal);
+            bookingCancelBtn.addEventListener('click', closeBookingModal);
+            bookingForm.addEventListener('submit', submitBookingForm);
+            searchInput.addEventListener('input', renderBookings);
+                statusFilter.value = 'confirmed';
+                statusFilter.addEventListener('change', renderBookings);
+            roomTypeFilter.addEventListener('change', renderBookings);
+            bookingDateFrom.addEventListener('change', renderBookings);
+            bookingDateTo.addEventListener('change', renderBookings);
+            if (!ensureClientAuth()) return;
+            loadBookings();
+        }
+
+        function ensureClientAuth() {
+            const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
+            const tokenExists = Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
+            if (!sessionAuthed && !tokenExists) {
+                window.location.href = `${BACKEND_URL}/admin.html`;
+                return false;
+            }
+            return true;
+        }
+
+        async function loadBookings() {
+            bookingsEmptyState.textContent = 'Loading bookings…';
+            bookingsTableBody.innerHTML = '';
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/bookings/all?includeDeleted=true`, { credentials: 'include' });
+                if (!res.ok) throw new Error('Failed to load bookings');
+                bookingsCache = await res.json();
+                renderBookings();
+            } catch (error) {
+                console.error(error);
+                bookingsEmptyState.textContent = 'Failed to load bookings';
+            }
+        }
+
+        function renderBookings() {
+            const query = searchInput.value.trim().toLowerCase();
+            const status = statusFilter.value;
+            const roomType = roomTypeFilter.value;
+            const dateFrom = bookingDateFrom.value;
+            const dateTo = bookingDateTo.value;
+
+            let rows = bookingsCache;
+            if (status) {
+                rows = rows.filter(b => (b.status || '').toLowerCase() === status);
+            }
+            if (roomType) {
+                rows = rows.filter(b => (b.roomType || '').toLowerCase() === roomType);
+            }
+            if (dateFrom) {
+                rows = rows.filter(b => b.checkIn && b.checkIn >= dateFrom);
+            }
+            if (dateTo) {
+                rows = rows.filter(b => b.checkIn && b.checkIn <= dateTo);
+            }
+            if (query) {
+                rows = rows.filter(b => {
+                    const fullName = [b.name, b.surname].filter(Boolean).join(' ').toLowerCase();
+                    return fullName.includes(query) || (b.phone || '').toLowerCase().includes(query);
+                });
+            }
+
+            bookingsTableBody.innerHTML = rows.map(renderBookingRow).join('');
+            bookingsEmptyState.textContent = rows.length === 0 ? 'No bookings match the current filters' : '';
+        }
+
+        function renderBookingRow(booking) {
+            const fullName = [booking.name, booking.surname].filter(Boolean).join(' ') || '—';
+            const status = (booking.status || 'unconfirmed').toLowerCase();
+            const chipClass = `status-pill status-${status}`;
+            const roomLabel = `${(booking.roomType || '').toUpperCase()} ${booking.roomId || '—'}`;
+            const dates = `${booking.checkIn || '?'} → ${booking.checkOut || '?'}`;
+            const totalValue = Number(booking.total);
+            const totalDisplay = Number.isFinite(totalValue)
+                ? totalValue.toLocaleString()
+                : '—';
+            return `
+                <tr>
+                    <td><strong>${fullName}</strong></td>
+                    <td>
+                        <div>${booking.phone || '—'}</div>
+                        <div class="muted">${booking.createdAt ? new Date(booking.createdAt).toLocaleString() : ''}</div>
+                    </td>
+                    <td>${roomLabel}</td>
+                    <td>${dates}</td>
+                    <td>${booking.guests || '—'}</td>
+                    <td>${totalDisplay}</td>
+                    <td><span class="${chipClass}">${status}</span></td>
+                    <td class="table-actions">
+                        <button class="ghost-btn" data-action="edit" data-id="${booking.id}">Edit</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        bookingsTableBody.addEventListener('click', (event) => {
+            const btn = event.target.closest('button');
+            if (!btn) return;
+            const bookingId = btn.dataset.id;
+            if (!bookingId) return;
+            if (btn.dataset.action === 'edit') {
+                const booking = bookingsCache.find(b => b.id === bookingId);
+                if (booking) openBookingModal(booking);
+            }
+        });
+
+        function openBookingModal(booking = null) {
+            bookingIdInput.value = booking ? booking.id : '';
+            document.getElementById('bookingName').value = booking?.name || '';
+            document.getElementById('bookingSurname').value = booking?.surname || '';
+            document.getElementById('bookingPhone').value = booking?.phone || '';
+            document.getElementById('bookingRoomType').value = booking?.roomType || 'small';
+            document.getElementById('bookingRoomId').value = booking?.roomId || '';
+            document.getElementById('bookingGuests').value = booking?.guests || 1;
+            document.getElementById('bookingCheckIn').value = booking?.checkIn || '';
+            document.getElementById('bookingCheckOut').value = booking?.checkOut || '';
+            document.getElementById('bookingStatus').value = booking?.status || 'confirmed';
+            bookingModalTitle.textContent = booking ? 'Edit booking' : 'Add booking';
+            bookingSubmitBtn.textContent = booking ? 'Update booking' : 'Create booking';
+            bookingModal.classList.add('open');
+        }
+
+        function closeBookingModal() {
+            bookingModal.classList.remove('open');
+        }
+
+        async function submitBookingForm(event) {
+            event.preventDefault();
+            const payload = {
+                name: document.getElementById('bookingName').value.trim(),
+                surname: document.getElementById('bookingSurname').value.trim(),
+                phone: document.getElementById('bookingPhone').value.trim(),
+                roomType: document.getElementById('bookingRoomType').value,
+                roomId: document.getElementById('bookingRoomId').value.trim(),
+                guests: document.getElementById('bookingGuests').value,
+                checkIn: document.getElementById('bookingCheckIn').value,
+                checkOut: document.getElementById('bookingCheckOut').value,
+                status: document.getElementById('bookingStatus').value
+            };
+
+            if (!payload.checkIn || !payload.checkOut) {
+                showToast('Please select both check-in and check-out dates', true);
+                return;
+            }
+
+            const bookingId = bookingIdInput.value;
+            const method = bookingId ? 'PUT' : 'POST';
+            const url = bookingId
+                ? `${BACKEND_URL}/admin/bookings/${bookingId}`
+                : `${BACKEND_URL}/admin/bookings`;
+
+            try {
+                bookingSubmitBtn.disabled = true;
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to save booking');
+                closeBookingModal();
+                showToast(bookingId ? 'Booking updated' : 'Booking created');
+                await loadBookings();
+            } catch (error) {
+                console.error(error);
+                showToast(error.message, true);
+            } finally {
+                bookingSubmitBtn.disabled = false;
+            }
+        }
+
+        function showToast(message, isError = false) {
+            if (!toastEl) return;
+            toastEl.textContent = message;
+            toastEl.classList.remove('error');
+            if (isError) toastEl.classList.add('error');
+            toastEl.classList.add('visible');
+            setTimeout(() => toastEl.classList.remove('visible'), 3000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders Manager</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-table-body">
+    <div class="admin-table-shell">
+        <header class="admin-table-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Orders Manager</h1>
+                <p class="muted">Track, edit, and create food orders directly in the database</p>
+            </div>
+            <div class="header-actions">
+                <button class="ghost-btn" id="ordersBackBtn">← Back to dashboard</button>
+                <button class="primary-btn" id="addOrderBtn">+ New order</button>
+            </div>
+        </header>
+
+        <section class="admin-table-toolbar">
+            <input type="search" id="ordersSearch" placeholder="Search by customer or phone">
+            <select id="ordersStatusFilter">
+                <option value="">All statuses</option>
+                <option value="unconfirmed">Unconfirmed</option>
+                <option value="live">Live</option>
+                <option value="completed">Completed</option>
+                <option value="deleted">Deleted</option>
+            </select>
+            <input type="date" id="ordersDateFrom" aria-label="Date from">
+            <input type="date" id="ordersDateTo" aria-label="Date to">
+            <button class="ghost-btn" id="refreshOrdersBtn">Refresh</button>
+        </section>
+
+        <section class="admin-table-card">
+            <div class="table-scroll">
+                <table class="data-table" id="ordersTable">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Contact</th>
+                            <th>Items</th>
+                            <th>Date</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="table-empty" id="ordersEmpty">Loading orders…</div>
+        </section>
+        <div id="ordersToast" class="table-toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="admin-modal" id="orderModal">
+        <div class="admin-modal-content">
+            <div class="modal-header">
+                <h2 id="orderModalTitle">Add order</h2>
+                <button class="ghost-btn" id="closeOrderModal">✕</button>
+            </div>
+            <form id="orderForm" class="form-grid">
+                <input type="hidden" id="orderId">
+                <label>
+                    Customer name
+                    <input type="text" id="orderName" required>
+                </label>
+                <label>
+                    Phone
+                    <input type="tel" id="orderPhone" required>
+                </label>
+                <label>
+                    Communication
+                    <select id="orderCommunication">
+                        <option value="">Not specified</option>
+                        <option value="phone">Phone call</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="line">Line</option>
+                    </select>
+                </label>
+                <label>
+                    Status
+                    <select id="orderStatus">
+                        <option value="unconfirmed">Unconfirmed</option>
+                        <option value="live">Live</option>
+                        <option value="completed">Completed</option>
+                        <option value="deleted">Deleted</option>
+                    </select>
+                </label>
+
+                <div class="span-2">
+                    <div class="items-header">
+                        <h3>Order items</h3>
+                        <button type="button" class="ghost-btn" id="addItemRowBtn">+ Add item</button>
+                    </div>
+                    <div id="itemsContainer" class="items-container"></div>
+                    <div class="items-summary">
+                        <span>Total:</span>
+                        <strong id="itemsTotal">0 THB</strong>
+                    </div>
+                </div>
+
+                <div class="form-row span-2">
+                    <button type="submit" class="primary-btn" id="orderSubmitBtn">Save order</button>
+                    <button type="button" class="ghost-btn" id="orderCancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <template id="itemRowTemplate">
+        <div class="item-row">
+            <input type="text" class="item-name" placeholder="Item name" required>
+            <input type="number" class="item-qty" placeholder="Qty" min="1" step="1" required>
+            <input type="number" class="item-price" placeholder="Price" min="0" step="1" required>
+            <button type="button" class="ghost-btn remove-item">×</button>
+        </div>
+    </template>
+
+    <script>
+        const BACKEND_URL = 'http://' + window.location.hostname + ':3001';
+        const AUTH_KEY = 'admin_authenticated';
+        const AUTH_TOKEN_KEY = 'admin_auth_token';
+        const ordersTableBody = document.querySelector('#ordersTable tbody');
+        const ordersEmptyState = document.getElementById('ordersEmpty');
+        const ordersSearch = document.getElementById('ordersSearch');
+        const ordersStatusFilter = document.getElementById('ordersStatusFilter');
+        const ordersDateFrom = document.getElementById('ordersDateFrom');
+        const ordersDateTo = document.getElementById('ordersDateTo');
+        const ordersToast = document.getElementById('ordersToast');
+
+        const orderModal = document.getElementById('orderModal');
+        const orderForm = document.getElementById('orderForm');
+        const orderIdInput = document.getElementById('orderId');
+        const orderModalTitle = document.getElementById('orderModalTitle');
+        const orderSubmitBtn = document.getElementById('orderSubmitBtn');
+        const itemsContainer = document.getElementById('itemsContainer');
+        const addItemRowBtn = document.getElementById('addItemRowBtn');
+        const itemsTotalEl = document.getElementById('itemsTotal');
+        const orderCancelBtn = document.getElementById('orderCancelBtn');
+        const closeOrderModalBtn = document.getElementById('closeOrderModal');
+
+        let ordersCache = [];
+
+        initOrdersPage();
+
+        function initOrdersPage() {
+            document.getElementById('ordersBackBtn').addEventListener('click', () => {
+                window.location.href = `${BACKEND_URL}/admin.html`;
+            });
+            document.getElementById('refreshOrdersBtn').addEventListener('click', loadOrders);
+            document.getElementById('addOrderBtn').addEventListener('click', () => openOrderModal());
+            ordersSearch.addEventListener('input', renderOrders);
+            ordersStatusFilter.value = 'completed';
+            ordersStatusFilter.addEventListener('change', renderOrders);
+            ordersDateFrom.addEventListener('change', renderOrders);
+            ordersDateTo.addEventListener('change', renderOrders);
+            addItemRowBtn.addEventListener('click', () => addItemRow());
+            orderForm.addEventListener('submit', submitOrderForm);
+            orderCancelBtn.addEventListener('click', closeOrderModal);
+            closeOrderModalBtn.addEventListener('click', closeOrderModal);
+            itemsContainer.addEventListener('input', updateItemsTotal);
+            itemsContainer.addEventListener('click', (event) => {
+                if (event.target.classList.contains('remove-item')) {
+                    event.target.closest('.item-row').remove();
+                    updateItemsTotal();
+                }
+            });
+            if (!ensureOrdersAuth()) return;
+            loadOrders();
+        }
+
+        function ensureOrdersAuth() {
+            const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
+            const tokenExists = Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
+            if (!sessionAuthed && !tokenExists) {
+                window.location.href = `${BACKEND_URL}/admin.html`;
+                return false;
+            }
+            return true;
+        }
+
+        async function loadOrders() {
+            ordersEmptyState.textContent = 'Loading orders…';
+            ordersTableBody.innerHTML = '';
+            try {
+                const res = await fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { credentials: 'include' });
+                if (!res.ok) throw new Error('Failed to load orders');
+                ordersCache = await res.json();
+                renderOrders();
+            } catch (error) {
+                console.error(error);
+                ordersEmptyState.textContent = 'Failed to load orders';
+            }
+        }
+
+        function renderOrders() {
+            const query = ordersSearch.value.trim().toLowerCase();
+            const status = ordersStatusFilter.value;
+            const dateFrom = ordersDateFrom.value;
+            const dateTo = ordersDateTo.value;
+            let rows = ordersCache;
+            if (status) {
+                rows = rows.filter(order => (order.status || '').toLowerCase() === status);
+            }
+            if (dateFrom) {
+                rows = rows.filter(order => {
+                    if (!order.createdAt) return false;
+                    const dateStr = new Date(order.createdAt).toISOString().split('T')[0];
+                    return dateStr >= dateFrom;
+                });
+            }
+            if (dateTo) {
+                rows = rows.filter(order => {
+                    if (!order.createdAt) return false;
+                    const dateStr = new Date(order.createdAt).toISOString().split('T')[0];
+                    return dateStr <= dateTo;
+                });
+            }
+            if (query) {
+                rows = rows.filter(order => {
+                    const name = (order.name || '').toLowerCase();
+                    const phone = (order.phone || '').toLowerCase();
+                    return name.includes(query) || phone.includes(query);
+                });
+            }
+
+            ordersTableBody.innerHTML = rows.map(renderOrderRow).join('');
+            ordersEmptyState.textContent = rows.length === 0 ? 'No orders match the current filters' : '';
+        }
+
+        function renderOrderRow(order) {
+            const status = (order.status || 'unconfirmed').toLowerCase();
+            const chipClass = `status-pill status-${status}`;
+            const itemsPreview = (order.items || [])
+                .map(item => `${item.quantity}× ${item.name}`)
+                .join(', ') || '—';
+            const createdDate = order.createdAt
+                ? new Date(order.createdAt).toISOString().split('T')[0]
+                : '—';
+            const totalDisplay = Number(order.total || 0).toFixed(2);
+            return `
+                <tr>
+                    <td><strong>${order.name || '—'}</strong></td>
+                    <td>
+                        <div>${order.phone || '—'}</div>
+                        <div class="muted">${order.communication || ''}</div>
+                    </td>
+                    <td>${itemsPreview}</td>
+                    <td>${createdDate}</td>
+                    <td>${totalDisplay} THB</td>
+                    <td><span class="${chipClass}">${status}</span></td>
+                    <td class="table-actions">
+                        <button class="ghost-btn" data-action="edit" data-id="${order.id}">Edit</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        ordersTableBody.addEventListener('click', (event) => {
+            const btn = event.target.closest('button');
+            if (!btn) return;
+            const orderId = btn.dataset.id;
+            if (!orderId) return;
+            if (btn.dataset.action === 'edit') {
+                const order = ordersCache.find(o => o.id === orderId);
+                if (order) openOrderModal(order);
+            }
+        });
+
+        function openOrderModal(order = null) {
+            orderIdInput.value = order ? order.id : '';
+            document.getElementById('orderName').value = order?.name || '';
+            document.getElementById('orderPhone').value = order?.phone || '';
+            document.getElementById('orderCommunication').value = order?.communication || '';
+            document.getElementById('orderStatus').value = order?.status || 'unconfirmed';
+            itemsContainer.innerHTML = '';
+            const items = order?.items && order.items.length ? order.items : [{ name: '', quantity: 1, price: 0 }];
+            items.forEach(item => addItemRow(item));
+            updateItemsTotal();
+            orderModalTitle.textContent = order ? 'Edit order' : 'Add order';
+            orderSubmitBtn.textContent = order ? 'Update order' : 'Create order';
+            orderModal.classList.add('open');
+        }
+
+        function closeOrderModal() {
+            orderModal.classList.remove('open');
+        }
+
+        function addItemRow(item = { name: '', quantity: 1, price: 0 }) {
+            const template = document.getElementById('itemRowTemplate');
+            const fragment = template.content.cloneNode(true);
+            fragment.querySelector('.item-name').value = item.name || '';
+            fragment.querySelector('.item-qty').value = item.quantity || 1;
+            fragment.querySelector('.item-price').value = item.price || 0;
+            itemsContainer.appendChild(fragment);
+            updateItemsTotal();
+        }
+
+        function collectItems() {
+            return Array.from(itemsContainer.querySelectorAll('.item-row')).map(row => ({
+                name: row.querySelector('.item-name').value.trim(),
+                quantity: Number(row.querySelector('.item-qty').value),
+                price: Number(row.querySelector('.item-price').value)
+            })).filter(item => item.name && item.quantity > 0 && item.price >= 0);
+        }
+
+        function updateItemsTotal() {
+            const total = collectItems().reduce((sum, item) => sum + item.quantity * item.price, 0);
+            itemsTotalEl.textContent = `${total.toFixed(2)} THB`;
+        }
+
+        async function submitOrderForm(event) {
+            event.preventDefault();
+            const items = collectItems();
+            if (items.length === 0) {
+                showOrdersToast('Please add at least one item', true);
+                return;
+            }
+            const payload = {
+                name: document.getElementById('orderName').value.trim(),
+                phone: document.getElementById('orderPhone').value.trim(),
+                communication: document.getElementById('orderCommunication').value,
+                status: document.getElementById('orderStatus').value,
+                items
+            };
+            const orderId = orderIdInput.value;
+            const method = orderId ? 'PUT' : 'POST';
+            const url = orderId
+                ? `${BACKEND_URL}/admin/orders/${orderId}`
+                : `${BACKEND_URL}/admin/orders`;
+            try {
+                orderSubmitBtn.disabled = true;
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to save order');
+                showOrdersToast(orderId ? 'Order updated' : 'Order created');
+                closeOrderModal();
+                await loadOrders();
+            } catch (error) {
+                console.error(error);
+                showOrdersToast(error.message, true);
+            } finally {
+                orderSubmitBtn.disabled = false;
+            }
+        }
+
+        function showOrdersToast(message, isError = false) {
+            if (!ordersToast) return;
+            ordersToast.textContent = message;
+            ordersToast.classList.remove('error');
+            if (isError) ordersToast.classList.add('error');
+            ordersToast.classList.add('visible');
+            setTimeout(() => ordersToast.classList.remove('visible'), 3000);
+        }
+    </script>
+</body>
+</html>
