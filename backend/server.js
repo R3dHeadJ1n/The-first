@@ -6,10 +6,10 @@ const cors = require('cors');
 const https = require('https');
 const path = require('path');
 const session = require('express-session');
-const ExcelJS = require('exceljs');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const multer = require('multer');
+const db = require('./db');
 
 const app = express();
 const PORT = 3001;
@@ -51,16 +51,8 @@ function requireAuth(req, res, next) {
     }
 }
 
-// Excel file path for storing bookings
-const BOOKINGS_FILE = path.join(__dirname, 'bookings.xlsx');
-
-// Menu file paths
-const MENU_FILE = path.join(__dirname, 'menu.xlsx');
 const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
-const MENU_IMAGES_MAPPING_FILE = path.join(__dirname, 'menu-images.json');
 const TELEGRAM_MESSAGES_FILE = path.join(__dirname, 'telegram-messages.json');
-const FOOD_ORDERS_FILE = path.join(__dirname, 'food-orders.json');
-const FOOD_ORDERS_EXCEL_FILE = path.join(__dirname, 'orders.xlsx');
 const TELEGRAM_ORDER_MESSAGES_FILE = path.join(__dirname, 'telegram-order-messages.json');
 
 // Ensure menu images directory exists
@@ -95,321 +87,207 @@ const upload = multer({
     }
 });
 
-// Excel file operations
-async function initializeExcelFile() {
-    const workbook = new ExcelJS.Workbook();
-    
-    // Check if file exists
-    if (fs.existsSync(BOOKINGS_FILE)) {
-        try {
-            await workbook.xlsx.readFile(BOOKINGS_FILE);
-            // Verify worksheet exists
-            let worksheet = workbook.getWorksheet('Bookings');
-            if (!worksheet) {
-                // Create worksheet if it doesn't exist
-                worksheet = workbook.addWorksheet('Bookings');
-                worksheet.columns = [
-                    { header: 'ID', key: 'id', width: 30 },
-                    { header: 'Room Type', key: 'roomType', width: 15 },
-                    { header: 'Room ID', key: 'roomId', width: 15 },
-                    { header: 'Check-in', key: 'checkIn', width: 15 },
-                    { header: 'Check-out', key: 'checkOut', width: 15 },
-                    { header: 'Guests', key: 'guests', width: 10 },
-                    { header: 'Phone', key: 'phone', width: 20 },
-                    { header: 'Source', key: 'source', width: 15 },
-                    { header: 'Created At', key: 'createdAt', width: 25 },
-                    { header: 'Status', key: 'status', width: 10 },
-                    { header: 'Name', key: 'name', width: 20 },
-                    { header: 'Surname', key: 'surname', width: 20 }
-                ];
-                
-                // Style header row
-                worksheet.getRow(1).font = { bold: true };
-                worksheet.getRow(1).fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: { argb: 'FFE0E0E0' }
-                };
-            }
-        } catch (readError) {
-            console.error('Error reading Excel file, creating new one:', readError);
-            // If file is corrupted, create new one
-            const worksheet = workbook.addWorksheet('Bookings');
-            worksheet.columns = [
-                { header: 'ID', key: 'id', width: 30 },
-                { header: 'Room Type', key: 'roomType', width: 15 },
-                { header: 'Room ID', key: 'roomId', width: 15 },
-                { header: 'Check-in', key: 'checkIn', width: 15 },
-                { header: 'Check-out', key: 'checkOut', width: 15 },
-                { header: 'Guests', key: 'guests', width: 10 },
-                { header: 'Phone', key: 'phone', width: 20 },
-                { header: 'Source', key: 'source', width: 15 },
-                { header: 'Created At', key: 'createdAt', width: 25 },
-                { header: 'Status', key: 'status', width: 10 },
-                { header: 'Name', key: 'name', width: 20 },
-                { header: 'Surname', key: 'surname', width: 20 }
-            ];
-            
-            // Style header row
-            worksheet.getRow(1).font = { bold: true };
-            worksheet.getRow(1).fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFE0E0E0' }
-            };
-        }
-    } else {
-        // Create new workbook with headers
-        const worksheet = workbook.addWorksheet('Bookings');
-        worksheet.columns = [
-            { header: 'ID', key: 'id', width: 30 },
-            { header: 'Room Type', key: 'roomType', width: 15 },
-            { header: 'Room ID', key: 'roomId', width: 15 },
-            { header: 'Check-in', key: 'checkIn', width: 15 },
-            { header: 'Check-out', key: 'checkOut', width: 15 },
-            { header: 'Guests', key: 'guests', width: 10 },
-            { header: 'Phone', key: 'phone', width: 20 },
-            { header: 'Source', key: 'source', width: 15 },
-            { header: 'Created At', key: 'createdAt', width: 25 },
-            { header: 'Status', key: 'status', width: 10 },
-            { header: 'Name', key: 'name', width: 20 },
-            { header: 'Surname', key: 'surname', width: 20 }
-        ];
-        
-        // Style header row
-        worksheet.getRow(1).font = { bold: true };
-        worksheet.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE0E0E0' }
-        };
-    }
-    
-    return workbook;
+// Database helpers
+function formatDateOnly(value) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toISOString().split('T')[0];
 }
 
-// Read all bookings from Excel (excluding deleted ones)
-async function readBookingsFromExcel() {
+function mapBookingRow(row) {
+    return {
+        id: row.public_id || `booking-${row.id}`,
+        roomType: row.room_type,
+        roomId: row.room_id ? String(row.room_id) : null,
+        checkIn: formatDateOnly(row.checkin_date),
+        checkOut: formatDateOnly(row.checkout_date),
+        guests: row.guests,
+        name: row.first_name || '',
+        surname: row.last_name || '',
+        phone: row.phone || '',
+        source: row.source || 'user',
+        createdAt: row.created_at ? row.created_at.toISOString() : null,
+        status: row.status || 'unconfirmed'
+    };
+}
+
+const DEFAULT_MENU_ITEMS = [
+    { dishId: 'dish-1', category: 'Breakfast', name: 'Scrambled Eggs', price: 80 },
+    { dishId: 'dish-2', category: 'Breakfast', name: 'Pancakes with Honey', price: 95 },
+    { dishId: 'dish-3', category: 'Breakfast', name: 'Thai Omelette', price: 85 },
+    { dishId: 'dish-4', category: 'Breakfast', name: 'French Toast', price: 90 },
+    { dishId: 'dish-5', category: 'Breakfast', name: 'Muesli with Yogurt', price: 75 },
+    { dishId: 'dish-6', category: 'Breakfast', name: 'Bacon and Eggs', price: 120 },
+    { dishId: 'dish-7', category: 'Breakfast', name: 'Breakfast Set', price: 150 },
+    { dishId: 'dish-8', category: 'Appetizers', name: 'Spring Rolls', price: 65 },
+    { dishId: 'dish-9', category: 'Appetizers', name: 'Chicken Satay', price: 85 },
+    { dishId: 'dish-10', category: 'Appetizers', name: 'Tom Yum Soup', price: 90 },
+    { dishId: 'dish-11', category: 'Appetizers', name: 'Papaya Salad', price: 70 },
+    { dishId: 'dish-12', category: 'Appetizers', name: 'Fish Cakes', price: 75 },
+    { dishId: 'dish-13', category: 'Appetizers', name: 'Fried Calamari', price: 95 },
+    { dishId: 'dish-14', category: 'Appetizers', name: 'Chicken Wings', price: 80 },
+    { dishId: 'dish-15', category: 'Pizza', name: 'Margherita', price: 180 },
+    { dishId: 'dish-16', category: 'Pizza', name: 'Pepperoni', price: 200 },
+    { dishId: 'dish-17', category: 'Pizza', name: 'Hawaiian', price: 190 },
+    { dishId: 'dish-18', category: 'Pizza', name: 'Seafood Pizza', price: 250 },
+    { dishId: 'dish-19', category: 'Pizza', name: 'Vegetarian', price: 170 },
+    { dishId: 'dish-20', category: 'Pizza', name: 'Thai Basil Pizza', price: 195 },
+    { dishId: 'dish-21', category: 'Pizza', name: 'Four Cheese', price: 210 },
+    { dishId: 'dish-22', category: 'Lunch', name: 'Pad Thai', price: 120 },
+    { dishId: 'dish-23', category: 'Lunch', name: 'Fried Rice', price: 100 },
+    { dishId: 'dish-24', category: 'Lunch', name: 'Khao Pad Sapparot', price: 130 },
+    { dishId: 'dish-25', category: 'Lunch', name: 'Pad Krapow Moo', price: 95 },
+    { dishId: 'dish-26', category: 'Lunch', name: 'Khao Soi', price: 130 },
+    { dishId: 'dish-27', category: 'Lunch', name: 'Noodle Soup', price: 90 },
+    { dishId: 'dish-28', category: 'Lunch', name: 'Grilled Chicken', price: 140 },
+    { dishId: 'dish-29', category: 'Lunch', name: 'Beef Steak', price: 180 },
+    { dishId: 'dish-30', category: 'Curry', name: 'Green Curry', price: 120 },
+    { dishId: 'dish-31', category: 'Curry', name: 'Red Curry', price: 120 },
+    { dishId: 'dish-32', category: 'Curry', name: 'Panang Curry', price: 130 },
+    { dishId: 'dish-33', category: 'Curry', name: 'Massaman Curry', price: 130 },
+    { dishId: 'dish-34', category: 'Curry', name: 'Yellow Curry', price: 115 },
+    { dishId: 'dish-35', category: 'Kids', name: 'Chicken Nuggets', price: 85 },
+    { dishId: 'dish-36', category: 'Kids', name: 'French Fries', price: 55 },
+    { dishId: 'dish-37', category: 'Kids', name: 'Spaghetti', price: 90 },
+    { dishId: 'dish-38', category: 'Kids', name: 'Fish & Chips', price: 95 },
+    { dishId: 'dish-39', category: 'Kids', name: 'Mini Burger', price: 80 },
+    { dishId: 'dish-40', category: 'Kids', name: 'Plain Fried Rice', price: 70 },
+    { dishId: 'dish-41', category: 'Drinks', name: 'Thai Iced Tea', price: 45 },
+    { dishId: 'dish-42', category: 'Drinks', name: 'Fresh Orange Juice', price: 60 },
+    { dishId: 'dish-43', category: 'Drinks', name: 'Watermelon Shake', price: 65 },
+    { dishId: 'dish-44', category: 'Drinks', name: 'Smoothie', price: 80 },
+    { dishId: 'dish-45', category: 'Drinks', name: 'Coconut Water', price: 50 },
+    { dishId: 'dish-46', category: 'Drinks', name: 'Soda', price: 35 },
+    { dishId: 'dish-47', category: 'Drinks', name: 'Coffee', price: 55 },
+    { dishId: 'dish-48', category: 'Drinks', name: 'Iced Coffee', price: 60 },
+    { dishId: 'dish-49', category: 'Drinks', name: 'Lemonade', price: 45 },
+    { dishId: 'dish-50', category: 'Drinks', name: 'Milkshake', price: 75 }
+];
+
+async function ensureMenuSeeded() {
+    const result = await db.query('SELECT COUNT(*)::int AS count FROM menu_items');
+    if (result.rows[0].count > 0) return;
+    const insertValues = DEFAULT_MENU_ITEMS.map((item, index) => [
+        item.dishId,
+        item.category,
+        item.name,
+        item.price,
+        index
+    ]);
+    for (const [dishId, category, name, price, order] of insertValues) {
+        await db.query(
+            `INSERT INTO menu_items (dish_id, category, name, price, display_order)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (dish_id) DO NOTHING`,
+            [dishId, category, name, price, order]
+        );
+    }
+}
+
+async function syncMenuImagesFromDisk() {
+    if (!fs.existsSync(MENU_IMAGES_DIR)) {
+        return;
+    }
+    const files = fs.readdirSync(MENU_IMAGES_DIR);
+    for (const filename of files) {
+        const match = filename.match(/^(dish-\d+)/);
+        if (!match) continue;
+        const dishId = match[1];
+        await db.query(
+            `UPDATE menu_items
+             SET image_path = $2
+             WHERE dish_id = $1 AND (image_path IS NULL OR image_path = '')`,
+            [dishId, filename]
+        );
+    }
+}
+
+// Read all bookings from database (excluding deleted ones)
+async function readBookingsFromDb() {
     try {
-        console.log('Reading bookings from Excel file:', BOOKINGS_FILE);
-        const workbook = await initializeExcelFile();
-        const worksheet = workbook.getWorksheet('Bookings');
-        
-        if (!worksheet) {
-            console.error('Worksheet "Bookings" not found');
-            return [];
-        }
-        
-        const bookings = [];
-        let rowCount = 0;
-        
-        // Start from row 2 (skip header)
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            rowCount++;
-            if (rowNumber === 1) {
-                console.log('Header row found');
-                return; // Skip header
-            }
-            
-            try {
-                // Read by column index (more reliable than keys)
-                const status = row.getCell(10).value; // Status column (10th column, 1-indexed)
-                // Skip deleted bookings (status = 'deleted')
-                if (status === 'deleted') {
-                    console.log(`Row ${rowNumber}: Skipping deleted booking`);
-                    return;
-                }
-                
-                const booking = {
-                    id: row.getCell(1).value,           // ID
-                    roomType: row.getCell(2).value,     // Room Type
-                    roomId: row.getCell(3).value,        // Room ID
-                    checkIn: row.getCell(4).value,       // Check-in
-                    checkOut: row.getCell(5).value,      // Check-out
-                    guests: row.getCell(6).value || null, // Guests
-                    phone: row.getCell(7).value || null, // Phone
-                    source: row.getCell(8).value,        // Source
-                    createdAt: row.getCell(9).value,     // Created At
-                    status: status || 'active',
-                    name: (row.getCell(11) && row.getCell(11).value) ? String(row.getCell(11).value) : null,
-                    surname: (row.getCell(12) && row.getCell(12).value) ? String(row.getCell(12).value) : null
-                };
-                
-                console.log(`Row ${rowNumber}: Found booking:`, booking.id, booking.roomId, booking.checkIn);
-                bookings.push(booking);
-            } catch (rowError) {
-                console.error(`Error reading row ${rowNumber}:`, rowError);
-            }
-        });
-        
-        console.log(`Active bookings found: ${bookings.length}`);
-        return bookings;
+        const result = await db.query(
+            `SELECT id, public_id, room_type, room_id, checkin_date, checkout_date, guests,
+                    first_name, last_name, phone, status, source, created_at
+             FROM bookings
+             WHERE status <> 'deleted'
+             ORDER BY created_at DESC`
+        );
+        return result.rows.map(mapBookingRow);
     } catch (error) {
-        console.error('Error reading bookings from Excel:', error);
-        console.error('Error stack:', error.stack);
+        console.error('Error reading bookings from database:', error);
         return [];
     }
 }
 
-// Add a new booking to Excel
-async function addBookingToExcel(booking) {
+// Add a new booking (database)
+async function insertBookingRecord(booking) {
     try {
-        console.log('addBookingToExcel called with:', JSON.stringify(booking, null, 2));
-        const workbook = await initializeExcelFile();
-        let worksheet = workbook.getWorksheet('Bookings');
-        
-        if (!worksheet) {
-            console.error('Worksheet "Bookings" not found after initialization');
-            return false;
+        if (!booking) return false;
+        const {
+            id,
+            roomType,
+            roomId = null,
+            checkIn,
+            checkOut,
+            guests,
+            phone = '',
+            source = 'user',
+            createdAt = new Date().toISOString(),
+            status = source === 'user' ? 'unconfirmed' : 'confirmed',
+            name = '',
+            surname = ''
+        } = booking;
+
+        if (!['small', 'big'].includes(roomType)) {
+            throw new Error('Invalid room type');
         }
-        
-        // Ensure columns are defined (important for existing files)
-        if (!worksheet.columns || worksheet.columns.length === 0) {
-            console.log('Setting up columns for worksheet');
-            worksheet.columns = [
-                { header: 'ID', key: 'id', width: 30 },
-                { header: 'Room Type', key: 'roomType', width: 15 },
-                { header: 'Room ID', key: 'roomId', width: 15 },
-                { header: 'Check-in', key: 'checkIn', width: 15 },
-                { header: 'Check-out', key: 'checkOut', width: 15 },
-                { header: 'Guests', key: 'guests', width: 10 },
-                { header: 'Phone', key: 'phone', width: 20 },
-                { header: 'Source', key: 'source', width: 15 },
-                { header: 'Created At', key: 'createdAt', width: 25 },
-                { header: 'Status', key: 'status', width: 10 },
-                { header: 'Name', key: 'name', width: 20 },
-                { header: 'Surname', key: 'surname', width: 20 }
-            ];
+        if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) {
+            throw new Error('Invalid date range');
         }
-        
-        // Add new row using column indices (more reliable)
-        const newRow = worksheet.addRow([]);
-        newRow.getCell(1).value = booking.id;
-        newRow.getCell(2).value = booking.roomType;
-        newRow.getCell(3).value = booking.roomId || '';
-        newRow.getCell(4).value = booking.checkIn;
-        newRow.getCell(5).value = booking.checkOut;
-        newRow.getCell(6).value = booking.guests || '';
-        newRow.getCell(7).value = booking.phone || '';
-        newRow.getCell(8).value = booking.source;
-        newRow.getCell(9).value = booking.createdAt;
-        newRow.getCell(10).value = booking.status || 'active';
-        newRow.getCell(11).value = booking.name || '';
-        newRow.getCell(12).value = booking.surname || '';
-        
-        // Style the new row
-        newRow.eachCell((cell) => {
-            cell.alignment = { vertical: 'middle', horizontal: 'left' };
-        });
-        
-        console.log('Writing to Excel file:', BOOKINGS_FILE);
-        console.log('Row count before write:', worksheet.rowCount);
-        console.log('Worksheet name:', worksheet.name);
-        console.log('Number of columns:', worksheet.columnCount);
-        
-        // Write the file
-        try {
-            await workbook.xlsx.writeFile(BOOKINGS_FILE);
-            console.log('File write completed successfully');
-        } catch (writeError) {
-            console.error('Error during file write:', writeError);
-            throw writeError;
+        if (!guests || Number.isNaN(Number(guests))) {
+            throw new Error('Invalid guests count');
         }
-        
-        // Verify file was written
-        if (fs.existsSync(BOOKINGS_FILE)) {
-            const stats = fs.statSync(BOOKINGS_FILE);
-            console.log('File exists, size:', stats.size, 'bytes');
-        } else {
-            console.error('ERROR: File was not created!');
-            return false;
-        }
-        
-        // Re-read to verify
-        const verifyWorkbook = new ExcelJS.Workbook();
-        await verifyWorkbook.xlsx.readFile(BOOKINGS_FILE);
-        const verifyWorksheet = verifyWorkbook.getWorksheet('Bookings');
-        console.log('Verification - Row count after write:', verifyWorksheet ? verifyWorksheet.rowCount : 'worksheet not found');
-        
-        console.log('Successfully added booking to Excel:', booking.id);
+
+        await db.query(
+            `INSERT INTO bookings
+             (public_id, room_type, room_id, checkin_date, checkout_date, guests,
+              first_name, last_name, phone, status, source, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [
+                id,
+                roomType,
+                roomId ? String(roomId) : null,
+                checkIn,
+                checkOut,
+                Number(guests),
+                name,
+                surname,
+                phone,
+                status,
+                source,
+                createdAt
+            ]
+        );
+
         return true;
     } catch (error) {
-        console.error('Error adding booking to Excel:', error);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        console.error('Booking data:', JSON.stringify(booking, null, 2));
-        console.error('File path:', BOOKINGS_FILE);
-        
-        // Check if file is locked (common issue on Windows)
-        if (error.message && (error.message.includes('EBUSY') || error.message.includes('locked'))) {
-            console.error('File is locked. Make sure bookings.xlsx is not open in Excel.');
-        }
-        
-        // Check if directory exists
-        const dir = path.dirname(BOOKINGS_FILE);
-        if (!fs.existsSync(dir)) {
-            console.error('Directory does not exist:', dir);
-        }
+        console.error('Error saving booking to database:', error);
         return false;
     }
 }
 
-// Update booking status in Excel (optionally update roomId)
+// Update booking status (DB)
 async function updateBookingStatus(bookingId, newStatus, roomId = null) {
     try {
-        const workbook = await initializeExcelFile();
-        const worksheet = workbook.getWorksheet('Bookings');
-        
-        // Find the row with matching ID
-        let found = false;
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber === 1) return; // Skip header
-            
-            // Check ID column (1st column)
-            if (row.getCell(1).value === bookingId) {
-                // Update status in Status column (10th column)
-                row.getCell(10).value = newStatus;
-                
-                // If roomId is provided, update it in Room ID column (3rd column)
-                if (roomId !== null) {
-                    row.getCell(3).value = roomId;
-                }
-                
-                // If marking as deleted, change row background color to red
-                if (newStatus === 'deleted') {
-                    row.eachCell((cell) => {
-                        cell.fill = {
-                            type: 'pattern',
-                            pattern: 'solid',
-                            fgColor: { argb: 'FFFF0000' } // Red
-                        };
-                    });
-                } else if (newStatus === 'confirmed') {
-                    // If confirming, change row background color to green
-                    row.eachCell((cell) => {
-                        cell.fill = {
-                            type: 'pattern',
-                            pattern: 'solid',
-                            fgColor: { argb: 'FF00FF00' } // Green
-                        };
-                    });
-                } else {
-                    // Remove any background color for other statuses
-                    row.eachCell((cell) => {
-                        cell.fill = null;
-                    });
-                }
-                
-                found = true;
-            }
-        });
-        
-        if (found) {
-            await workbook.xlsx.writeFile(BOOKINGS_FILE);
-            return true;
-        }
-        
-        return false;
+        const query = `
+            UPDATE bookings
+            SET status = $2,
+                room_id = COALESCE($3::text, room_id)
+            WHERE public_id = $1
+            RETURNING public_id
+        `;
+        const result = await db.query(query, [bookingId, newStatus, roomId]);
+        return result.rowCount > 0;
     } catch (error) {
         console.error('Error updating booking status:', error);
         return false;
@@ -569,7 +447,7 @@ app.get('/admin/check-auth', (req, res) => {
 app.get('/admin/bookings', async (req, res) => {
     try {
         console.log('GET /admin/bookings - Request received');
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         console.log('Total bookings:', allBookings.length);
         
         // Get admin bookings OR confirmed user bookings (exclude unconfirmed)
@@ -589,7 +467,7 @@ app.get('/admin/bookings', async (req, res) => {
         res.json(adminBookings);
     } catch (error) {
         console.error('Error getting admin bookings:', error);
-        res.status(500).json({ error: 'Failed to read bookings from Excel' });
+        res.status(500).json({ error: 'Failed to read bookings' });
     }
 });
 
@@ -597,7 +475,7 @@ app.get('/admin/bookings', async (req, res) => {
 app.get('/admin/unconfirmed-bookings', async (req, res) => {
     try {
         console.log('GET /admin/unconfirmed-bookings - Request received');
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         
         // Get only unconfirmed user bookings
         const unconfirmedBookings = allBookings.filter(booking => 
@@ -614,14 +492,14 @@ app.get('/admin/unconfirmed-bookings', async (req, res) => {
         res.json(unconfirmedBookings);
     } catch (error) {
         console.error('Error getting unconfirmed bookings:', error);
-        res.status(500).json({ error: 'Failed to read bookings from Excel' });
+        res.status(500).json({ error: 'Failed to read bookings' });
     }
 });
 
 // Orders API (admin)
-app.get('/admin/orders/unconfirmed', (req, res) => {
+app.get('/admin/orders/unconfirmed', async (req, res) => {
     try {
-        const data = readOrders();
+        const data = await readOrders();
         const list = data.orders.filter(o => o.status === 'unconfirmed');
         list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         res.json(list);
@@ -630,9 +508,9 @@ app.get('/admin/orders/unconfirmed', (req, res) => {
     }
 });
 
-app.get('/admin/orders/live', (req, res) => {
+app.get('/admin/orders/live', async (req, res) => {
     try {
-        const data = readOrders();
+        const data = await readOrders();
         const list = data.orders.filter(o => o.status === 'live');
         list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         res.json(list);
@@ -641,9 +519,9 @@ app.get('/admin/orders/live', (req, res) => {
     }
 });
 
-app.get('/admin/orders/all', (req, res) => {
+app.get('/admin/orders/all', async (req, res) => {
     try {
-        const data = readOrders();
+        const data = await readOrders();
         const list = data.orders.filter(o => o.status === 'completed' || o.status === 'declined');
         list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         res.json(list);
@@ -654,7 +532,7 @@ app.get('/admin/orders/all', (req, res) => {
 
 app.get('/admin/bookings/all', async (req, res) => {
     try {
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         allBookings.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         res.json(allBookings);
     } catch (e) {
@@ -662,14 +540,17 @@ app.get('/admin/bookings/all', async (req, res) => {
     }
 });
 
-function updateOrderStatus(orderId, newStatus) {
-    const data = readOrders();
-    const order = data.orders.find(o => o.id === orderId);
-    if (!order) return false;
-    order.status = newStatus;
-    saveOrders(data);
-    updateOrderStatusInExcel(orderId, newStatus).catch(e => console.error('Excel update error:', e));
-    return true;
+async function updateOrderStatus(orderId, newStatus) {
+    try {
+        const result = await db.query(
+            `UPDATE orders SET status = $2 WHERE public_id = $1 RETURNING public_id`,
+            [orderId, newStatus]
+        );
+        return result.rowCount > 0;
+    } catch (error) {
+        console.error('Error updating order status:', error);
+        return false;
+    }
 }
 
 function updateOrderTelegramMessage(orderId, newText, removeButtons = false) {
@@ -691,31 +572,31 @@ function updateOrderTelegramMessageWithComplete(orderId, newText) {
     });
 }
 
-app.post('/admin/orders/:id/confirm', (req, res) => {
+app.post('/admin/orders/:id/confirm', async (req, res) => {
     try {
         const orderId = req.params.id;
-        const ok = updateOrderStatus(orderId, 'live');
+        const ok = await updateOrderStatus(orderId, 'live');
         if (!ok) return res.status(404).json({ error: 'Order not found' });
-        const data = readOrders();
-        const order = data.orders.find(o => o.id === orderId);
-        const lines = formatOrderLines(order);
-        const newText = lines.join('\n') + '\n\n✅ Status: Order is being prepared';
-        updateOrderTelegramMessageWithComplete(orderId, newText);
+        const order = await fetchOrderByPublicId(orderId);
+        if (order) {
+            const lines = formatOrderLines(order);
+            const newText = lines.join('\n') + '\n\nStatus: Order is being prepared';
+            updateOrderTelegramMessageWithComplete(orderId, newText);
+        }
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to confirm order' });
     }
 });
 
-app.post('/admin/orders/:id/decline', (req, res) => {
+app.post('/admin/orders/:id/decline', async (req, res) => {
     try {
         const orderId = req.params.id;
-        const data = readOrders();
-        const order = data.orders.find(o => o.id === orderId);
+        const order = await fetchOrderByPublicId(orderId);
         if (!order) return res.status(404).json({ error: 'Order not found' });
-        updateOrderStatus(orderId, 'declined');
+        await updateOrderStatus(orderId, 'declined');
         const lines = formatOrderLines(order);
-        const newText = lines.join('\n') + '\n\n❌ Status: Declined';
+        const newText = lines.join('\n') + '\n\n🔴 Status: Declined';
         updateOrderTelegramMessage(orderId, newText, true);
         res.json({ success: true });
     } catch (e) {
@@ -723,15 +604,14 @@ app.post('/admin/orders/:id/decline', (req, res) => {
     }
 });
 
-app.post('/admin/orders/:id/complete', (req, res) => {
+app.post('/admin/orders/:id/complete', async (req, res) => {
     try {
         const orderId = req.params.id;
-        const data = readOrders();
-        const order = data.orders.find(o => o.id === orderId);
+        const order = await fetchOrderByPublicId(orderId);
         if (!order) return res.status(404).json({ error: 'Order not found' });
-        updateOrderStatus(orderId, 'completed');
+        await updateOrderStatus(orderId, 'completed');
         const lines = formatOrderLines(order);
-        const newText = lines.join('\n') + '\n\n✅ Status: Order completed';
+        const newText = lines.join('\n') + '\n\nStatus: Order completed';
         updateOrderTelegramMessage(orderId, newText, true);
         res.json({ success: true });
     } catch (e) {
@@ -739,13 +619,10 @@ app.post('/admin/orders/:id/complete', (req, res) => {
     }
 });
 
-app.post('/admin/clear-history', (req, res) => {
+app.post('/admin/clear-history', async (req, res) => {
     try {
-        const data = readOrders();
-        data.orders = data.orders.filter(o => o.status === 'unconfirmed' || o.status === 'live');
-        saveOrders(data);
-        clearOrdersHistoryInExcel().catch(e => console.error('Excel clear error:', e));
-        res.json({ success: true });
+        const cleared = await clearOrdersHistoryInDb();
+        res.json({ success: cleared });
     } catch (e) {
         res.status(500).json({ error: 'Failed to clear history' });
     }
@@ -753,19 +630,7 @@ app.post('/admin/clear-history', (req, res) => {
 
 app.post('/admin/clear-bookings-history', async (req, res) => {
     try {
-        const workbook = await initializeExcelFile();
-        const worksheet = workbook.getWorksheet('Bookings');
-        if (!worksheet) return res.status(500).json({ error: 'Worksheet not found' });
-        const rowsToRemove = [];
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber === 1) return;
-            const status = row.getCell(10).value;
-            if (status === 'deleted') rowsToRemove.push(rowNumber);
-        });
-        for (let i = rowsToRemove.length - 1; i >= 0; i--) {
-            worksheet.spliceRows(rowsToRemove[i], 1);
-        }
-        await workbook.xlsx.writeFile(BOOKINGS_FILE);
+        await db.query(`DELETE FROM bookings WHERE status = 'deleted'`);
         res.json({ success: true });
     } catch (e) {
         console.error('Clear bookings history error:', e);
@@ -819,13 +684,13 @@ app.get('/admin/available-rooms', async (req, res) => {
         }
         
         // Get all bookings
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         
         // Get all rooms for this type
         const allRooms = ROOM_INVENTORY[roomType].rooms;
         
         console.log(`Available rooms check: roomType=${roomType}, checkIn=${checkIn}, checkOut=${checkOut}`);
-        console.log(`Total bookings from Excel: ${allBookings.length}`);
+        console.log(`Total bookings from database: ${allBookings.length}`);
         console.log(`Total rooms for ${roomType}: ${allRooms.length}`, allRooms);
         
         // If no bookings at all, all rooms are available
@@ -960,7 +825,7 @@ function getDatesBetween(checkIn, checkOut) {
 }
 
 async function getAvailableRooms(roomType, checkIn, checkOut) {
-    const allBookings = await readBookingsFromExcel();
+    const allBookings = await readBookingsFromDb();
     const allRooms = ROOM_INVENTORY[roomType]?.rooms || [];
     if (!allRooms.length) return [];
     if (!allBookings?.length) return [...allRooms];
@@ -1063,12 +928,11 @@ app.post('/admin/book-room', async (req, res) => {
         };
         
         console.log('Created booking object:', JSON.stringify(booking, null, 2));
-        console.log('Calling addBookingToExcel...');
+        console.log('Calling insertBookingRecord...');
         
-        // Add to Excel
-        const success = await addBookingToExcel(booking);
+        const success = await insertBookingRecord(booking);
         
-        console.log('addBookingToExcel returned:', success);
+        console.log('insertBookingRecord returned:', success);
         
         if (success) {
             console.log('Booking saved successfully, sending success response');
@@ -1078,8 +942,8 @@ app.post('/admin/book-room', async (req, res) => {
                 booking: booking
             });
         } else {
-            console.error('Failed to save booking to Excel');
-            res.status(500).json({ success: false, error: 'Failed to save booking to Excel. Check server console for details.' });
+            console.error('Failed to save booking to database');
+            res.status(500).json({ success: false, error: 'Failed to save booking. Check server console for details.' });
         }
     } catch (error) {
         console.error('Error creating admin booking:', error);
@@ -1098,7 +962,7 @@ app.delete('/admin/book-room', async (req, res) => {
         }
         
         // Read bookings and find matching ones
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         const matchingBookings = allBookings.filter(booking => {
             return booking.roomId === roomId && 
                    booking.source === 'admin' &&
@@ -1145,173 +1009,146 @@ function saveTelegramMessage(bookingId, chatId, messageId, text) {
 
 // Food orders storage - { orders: [{ id, items, total, name, phone, communication, status, createdAt }] }
 // status: 'unconfirmed' | 'live' | 'completed' | 'declined'
-function readOrders() {
+async function readOrders() {
     try {
-        if (fs.existsSync(FOOD_ORDERS_FILE)) {
-            const d = JSON.parse(fs.readFileSync(FOOD_ORDERS_FILE, 'utf8'));
-            return { orders: Array.isArray(d.orders) ? d.orders : [] };
+        const result = await db.query(`
+            SELECT 
+                o.id,
+                o.public_id,
+                o.customer_name,
+                o.customer_phone,
+                o.communication,
+                o.status,
+                o.total,
+                o.created_at,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'name', oi.name,
+                            'quantity', oi.quantity,
+                            'price', oi.price,
+                            'subtotal', oi.subtotal
+                        )
+                    ) FILTER (WHERE oi.id IS NOT NULL),
+                    '[]'
+                ) AS items
+            FROM orders o
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            GROUP BY o.id
+            ORDER BY o.created_at DESC
+        `);
+        return {
+            orders: result.rows.map(row => ({
+                id: row.public_id,
+                items: row.items || [],
+                total: row.total,
+                name: row.customer_name || '',
+                phone: row.customer_phone || '',
+                communication: row.communication || '',
+                status: row.status,
+                createdAt: row.created_at ? row.created_at.toISOString() : null
+            }))
+        };
+    } catch (error) {
+        console.error('Error reading orders from database:', error);
+        return { orders: [] };
+    }
+}
+
+async function fetchOrderByPublicId(orderId) {
+    const result = await db.query(
+        `SELECT 
+            o.id,
+            o.public_id,
+            o.customer_name,
+            o.customer_phone,
+            o.communication,
+            o.status,
+            o.total,
+            o.created_at,
+            COALESCE(
+                json_agg(
+                    json_build_object(
+                        'name', oi.name,
+                        'quantity', oi.quantity,
+                        'price', oi.price,
+                        'subtotal', oi.subtotal
+                    )
+                ) FILTER (WHERE oi.id IS NOT NULL),
+                '[]'
+            ) AS items
+         FROM orders o
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+         WHERE o.public_id = $1
+         GROUP BY o.id`,
+        [orderId]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+        id: row.public_id,
+        items: row.items || [],
+        total: row.total,
+        name: row.customer_name || '',
+        phone: row.customer_phone || '',
+        communication: row.communication || '',
+        status: row.status,
+        createdAt: row.created_at ? row.created_at.toISOString() : null
+    };
+}
+
+async function clearOrdersHistoryInDb() {
+    try {
+        await db.query(`DELETE FROM orders WHERE status IN ('completed', 'declined')`);
+        return true;
+    } catch (error) {
+        console.error('Failed to clear order history:', error);
+        return false;
+    }
+}
+
+async function insertOrderWithItems(orderPayload) {
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { id, name, phone, communication, items, total, status } = orderPayload;
+        const orderResult = await client.query(
+            `INSERT INTO orders (public_id, customer_name, customer_phone, communication, total, status)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, public_id, created_at`,
+            [id, name || '', phone || '', communication || '', total, status || 'unconfirmed']
+        );
+        const orderDbId = orderResult.rows[0].id;
+        for (const item of items) {
+            await client.query(
+                `INSERT INTO order_items (order_id, name, quantity, price)
+                 VALUES ($1, $2, $3, $4)`,
+                [orderDbId, item.name, item.quantity, item.price]
+            );
         }
-    } catch (e) { /* ignore */ }
-    return { orders: [] };
-}
-
-function saveOrders(data) {
-    fs.writeFileSync(FOOD_ORDERS_FILE, JSON.stringify(data, null, 2));
-}
-
-// Orders Excel file operations
-const ORDERS_EXCEL_COLS = {
-    id: 1, name: 2, phone: 3, communication: 4, items: 5, total: 6, status: 7, createdAt: 8
-};
-
-function formatOrderItemsForExcel(items) {
-    if (!items || !Array.isArray(items)) return '';
-    return items.map(it => `${it.quantity}x ${it.name} (${(it.price * it.quantity).toFixed(2)} THB)`).join('; ');
-}
-
-async function initializeOrdersExcelFile() {
-    const workbook = new ExcelJS.Workbook();
-    if (fs.existsSync(FOOD_ORDERS_EXCEL_FILE)) {
-        try {
-            await workbook.xlsx.readFile(FOOD_ORDERS_EXCEL_FILE);
-            let worksheet = workbook.getWorksheet('Orders');
-            if (!worksheet) {
-                worksheet = workbook.addWorksheet('Orders');
-                worksheet.columns = [
-                    { header: 'ID', key: 'id', width: 35 },
-                    { header: 'Customer Name', key: 'name', width: 20 },
-                    { header: 'Phone', key: 'phone', width: 20 },
-                    { header: 'Communication', key: 'communication', width: 15 },
-                    { header: 'Items', key: 'items', width: 50 },
-                    { header: 'Total (THB)', key: 'total', width: 12 },
-                    { header: 'Status', key: 'status', width: 12 },
-                    { header: 'Created At', key: 'createdAt', width: 25 }
-                ];
-                worksheet.getRow(1).font = { bold: true };
-                worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-            }
-        } catch (e) {
-            console.error('Error reading orders Excel, creating new:', e);
-            const worksheet = workbook.addWorksheet('Orders');
-            worksheet.columns = [
-                { header: 'ID', key: 'id', width: 35 },
-                { header: 'Customer Name', key: 'name', width: 20 },
-                { header: 'Phone', key: 'phone', width: 20 },
-                { header: 'Communication', key: 'communication', width: 15 },
-                { header: 'Items', key: 'items', width: 50 },
-                { header: 'Total (THB)', key: 'total', width: 12 },
-                { header: 'Status', key: 'status', width: 12 },
-                { header: 'Created At', key: 'createdAt', width: 25 }
-            ];
-            worksheet.getRow(1).font = { bold: true };
-            worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-        }
-    } else {
-        const worksheet = workbook.addWorksheet('Orders');
-        worksheet.columns = [
-            { header: 'ID', key: 'id', width: 35 },
-            { header: 'Customer Name', key: 'name', width: 20 },
-            { header: 'Phone', key: 'phone', width: 20 },
-            { header: 'Communication', key: 'communication', width: 15 },
-            { header: 'Items', key: 'items', width: 50 },
-            { header: 'Total (THB)', key: 'total', width: 12 },
-            { header: 'Status', key: 'status', width: 12 },
-            { header: 'Created At', key: 'createdAt', width: 25 }
-        ];
-        worksheet.getRow(1).font = { bold: true };
-        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-    }
-    return workbook;
-}
-
-async function addOrderToExcel(order) {
-    try {
-        const workbook = await initializeOrdersExcelFile();
-        const worksheet = workbook.getWorksheet('Orders');
-        if (!worksheet) return;
-        const itemsStr = formatOrderItemsForExcel(order.items);
-        worksheet.addRow({
-            id: order.id,
-            name: order.name || '',
-            phone: order.phone || '',
-            communication: order.communication || '',
-            items: itemsStr,
-            total: order.total || 0,
-            status: order.status || 'unconfirmed',
-            createdAt: order.createdAt || new Date().toISOString()
-        });
-        await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
-    } catch (e) {
-        console.error('Error adding order to Excel:', e);
+        await client.query('COMMIT');
+        return {
+            id: orderResult.rows[0].public_id,
+            createdAt: orderResult.rows[0].created_at,
+        };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
     }
 }
 
-async function updateOrderStatusInExcel(orderId, newStatus) {
-    try {
-        const workbook = await initializeOrdersExcelFile();
-        const worksheet = workbook.getWorksheet('Orders');
-        if (!worksheet) return;
-        let found = false;
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber === 1) return;
-            if (String(row.getCell(ORDERS_EXCEL_COLS.id).value) === orderId) {
-                row.getCell(ORDERS_EXCEL_COLS.status).value = newStatus;
-                found = true;
-            }
-        });
-        if (found) await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
-    } catch (e) {
-        console.error('Error updating order status in Excel:', e);
-    }
-}
+ensureMenuSeeded()
+    .then(syncMenuImagesFromDisk)
+    .catch(err => console.error('Failed to seed menu items:', err));
 
-async function clearOrdersHistoryInExcel() {
-    try {
-        const workbook = await initializeOrdersExcelFile();
-        const worksheet = workbook.getWorksheet('Orders');
-        if (!worksheet) return;
-        const rowsToRemove = [];
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            if (rowNumber === 1) return;
-            const status = String(row.getCell(ORDERS_EXCEL_COLS.status).value || '');
-            if (status === 'completed' || status === 'declined') rowsToRemove.push(rowNumber);
-        });
-        for (let i = rowsToRemove.length - 1; i >= 0; i--) {
-            worksheet.spliceRows(rowsToRemove[i], 1);
-        }
-        await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
-    } catch (e) {
-        console.error('Error clearing orders history in Excel:', e);
-    }
-}
+// Orders helpers
 
-async function migrateOrdersToExcel() {
-    if (fs.existsSync(FOOD_ORDERS_EXCEL_FILE)) return; // Excel already exists, skip migration
-    const data = readOrders();
-    if (!data.orders || data.orders.length === 0) return;
-    try {
-        const workbook = await initializeOrdersExcelFile();
-        const worksheet = workbook.getWorksheet('Orders');
-        if (!worksheet) return;
-        for (const order of data.orders) {
-            const itemsStr = formatOrderItemsForExcel(order.items);
-            worksheet.addRow({
-                id: order.id,
-                name: order.name || '',
-                phone: order.phone || '',
-                communication: order.communication || '',
-                items: itemsStr,
-                total: order.total || 0,
-                status: order.status || 'unconfirmed',
-                createdAt: order.createdAt || new Date().toISOString()
-            });
-        }
-        await workbook.xlsx.writeFile(FOOD_ORDERS_EXCEL_FILE);
-        console.log('Migrated', data.orders.length, 'orders to Excel');
-    } catch (e) {
-        console.error('Error migrating orders to Excel:', e);
-    }
-}
+
+
+
+
 
 function readOrderTelegramMessages() {
     try {
@@ -1453,7 +1290,7 @@ async function processTelegramMessage(msg) {
     if (!chatId || !TELEGRAM_ADMIN_CHAT_IDS.includes(String(chatId))) return;
 
     if (text === '#bookings') {
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         const activeBookings = allBookings.filter(b => (b.status || '') !== 'deleted');
         if (activeBookings.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: 'No active bookings.' });
@@ -1474,7 +1311,7 @@ async function processTelegramMessage(msg) {
         const reply = lines.join('\n').trim();
         telegramApiRequest('sendMessage', { chat_id: chatId, text: reply });
     } else if (text === '#unconfirm') {
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         const unconfirmed = allBookings.filter(b => (b.status || '') === 'unconfirmed');
         if (unconfirmed.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: 'No bookings waiting for confirmation.' });
@@ -1494,7 +1331,7 @@ async function processTelegramMessage(msg) {
         const reply = lines.join('\n').trim();
         telegramApiRequest('sendMessage', { chat_id: chatId, text: reply });
     } else if (text === '#orders') {
-        const data = readOrders();
+        const data = await readOrders();
         const live = data.orders.filter(o => o.status === 'live');
         if (live.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: '🛒 No live orders.' });
@@ -1509,7 +1346,7 @@ async function processTelegramMessage(msg) {
         });
         telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
     } else if (text === '#2confirm') {
-        const data = readOrders();
+        const data = await readOrders();
         const unconfirmed = data.orders.filter(o => o.status === 'unconfirmed');
         if (unconfirmed.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: '⏳ No orders waiting for confirmation.' });
@@ -1524,7 +1361,7 @@ async function processTelegramMessage(msg) {
         });
         telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
     } else if (text === '#allorders') {
-        const data = readOrders();
+        const data = await readOrders();
         const history = data.orders.filter(o => o.status === 'completed' || o.status === 'declined');
         if (history.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: '📋 No order history.' });
@@ -1538,7 +1375,7 @@ async function processTelegramMessage(msg) {
         if (history.length > 20) lines.push(`\n... and ${history.length - 20} more`);
         telegramApiRequest('sendMessage', { chat_id: chatId, text: lines.join('\n').trim() });
     } else if (text === '#allbookings') {
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         if (allBookings.length === 0) {
             telegramApiRequest('sendMessage', { chat_id: chatId, text: '📋 No booking history.' });
             return;
@@ -1570,13 +1407,14 @@ async function processTelegramCallback(cb) {
     if (!id) return;
 
     // Order callbacks
+    const orderId = id;
     if (action === 'order_confirm') {
-        const ok = updateOrderStatus(id, 'live');
-        const order = readOrders().orders.find(o => o.id === id);
+        const ok = await updateOrderStatus(orderId, 'live');
+        const order = await fetchOrderByPublicId(orderId);
         if (ok && order) {
             const lines = formatOrderLines(order);
-            const newText = lines.join('\n') + '\n\n✅ Status: Order is being prepared';
-            updateOrderTelegramMessageWithComplete(id, newText);
+            const newText = lines.join('\n') + '\n\nStatus: Order is being prepared';
+            updateOrderTelegramMessageWithComplete(orderId, newText);
             telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order confirmed' });
         } else {
             telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
@@ -1584,36 +1422,36 @@ async function processTelegramCallback(cb) {
         return;
     }
     if (action === 'order_decline') {
-        const order = readOrders().orders.find(o => o.id === id);
-        if (order) {
-            updateOrderStatus(id, 'declined');
-            const lines = formatOrderLines(order);
-            const newText = lines.join('\n') + '\n\n❌ Status: Declined';
-            updateOrderTelegramMessage(id, newText, true);
-            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order declined' });
-        } else {
+        const order = await fetchOrderByPublicId(orderId);
+        if (!order) {
             telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
+            return;
         }
+        await updateOrderStatus(orderId, 'declined');
+        const lines = formatOrderLines(order);
+        const newText = lines.join('\n') + '\n\n🔴 Status: Declined';
+        updateOrderTelegramMessage(orderId, newText, true);
+        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order declined' });
         return;
     }
     if (action === 'order_complete') {
-        const order = readOrders().orders.find(o => o.id === id);
-        if (order) {
-            updateOrderStatus(id, 'completed');
-            const lines = formatOrderLines(order);
-            const newText = lines.join('\n') + '\n\n✅ Status: Order completed';
-            updateOrderTelegramMessage(id, newText, true);
-            telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order completed' });
-        } else {
+        const order = await fetchOrderByPublicId(orderId);
+        if (!order) {
             telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order not found' });
+            return;
         }
+        await updateOrderStatus(orderId, 'completed');
+        const lines = formatOrderLines(order);
+        const newText = lines.join('\n') + '\n\nStatus: Order completed';
+        updateOrderTelegramMessage(orderId, newText, true);
+        telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Order completed' });
         return;
     }
 
     // Booking callbacks
     const bookingId = id;
     if (action === 'confirm') {
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         const booking = allBookings.find(b => b.id === bookingId);
         if (!booking || !booking.roomType || !booking.checkIn || !booking.checkOut) {
             telegramApiRequest('answerCallbackQuery', { callback_query_id: cb.id, text: 'Booking not found' });
@@ -1782,14 +1620,14 @@ function sendFoodOrderTelegramMessage(items, total, customerName, customerPhone,
 }
 
 // POST /api/order-food - Receive order, save with status unconfirmed, send to Telegram
-app.post('/api/order-food', (req, res) => {
+app.post('/api/order-food', async (req, res) => {
     try {
         const { items, name: customerName, phone: customerPhone, communication } = req.body;
-        
+
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, error: 'Items array is required' });
         }
-        
+
         let total = 0;
         const validItems = items.filter(item => {
             if (!item || !item.name || typeof item.quantity !== 'number' || typeof item.price !== 'number') {
@@ -1798,27 +1636,24 @@ app.post('/api/order-food', (req, res) => {
             total += item.price * item.quantity;
             return true;
         });
-        
+
         if (validItems.length === 0) {
             return res.status(400).json({ success: false, error: 'No valid order items' });
         }
-        
+
         const orderId = 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-        const data = readOrders();
-        const order = {
+        const orderRecord = {
             id: orderId,
             items: validItems,
-            total,
+            total: Math.round(total),
             name: customerName || '',
             phone: customerPhone || '',
             communication: communication || '',
-            status: 'unconfirmed',
-            createdAt: new Date().toISOString()
+            status: 'unconfirmed'
         };
-        data.orders.push(order);
-        saveOrders(data);
-        addOrderToExcel(order).catch(e => console.error('Excel write error:', e));
-        
+
+        await insertOrderWithItems(orderRecord);
+
         const commLabels = { phone: 'Phone call', whatsapp: 'WhatsApp', telegram: 'Telegram', line: 'Line' };
         const commLabel = commLabels[communication] || communication || '';
         sendFoodOrderTelegramMessage(validItems, total, customerName, customerPhone, commLabel, orderId);
@@ -1844,8 +1679,8 @@ app.get('/booked-dates', async (req, res) => {
         const capacity = ROOM_INVENTORY[roomType].total;
         const roomIds = ROOM_INVENTORY[roomType].rooms;
         
-        // Read bookings from Excel
-        const bookings = await readBookingsFromExcel();
+        // Read bookings
+        const bookings = await readBookingsFromDb();
         
         // Count bookings per date for this room type
         const bookingsPerDate = {};
@@ -1889,15 +1724,15 @@ app.get('/booked-dates', async (req, res) => {
         res.json(unavailableDates.sort());
     } catch (error) {
         console.error('Error getting booked dates:', error);
-        res.status(500).json({ error: 'Failed to read bookings from Excel' });
+        res.status(500).json({ error: 'Failed to read bookings' });
     }
 });
 
-// Auto-delete expired bookings (mark as deleted in Excel)
+// Auto-delete expired bookings (mark as deleted in database)
 async function cleanupExpiredBookings() {
     try {
         const today = new Date().toISOString().split('T')[0];
-        const allBookings = await readBookingsFromExcel();
+        const allBookings = await readBookingsFromDb();
         
         let removed = 0;
         for (const booking of allBookings) {
@@ -1909,7 +1744,7 @@ async function cleanupExpiredBookings() {
         }
         
         if (removed > 0) {
-            console.log(`Marked ${removed} expired booking(s) as deleted in Excel`);
+            console.log(`Marked ${removed} expired booking(s) as deleted in database`);
         }
     } catch (error) {
         console.error('Error cleaning up expired bookings:', error);
@@ -1929,22 +1764,37 @@ app.post('/book-room', async (req, res) => {
     try {
         const { roomType, checkIn, checkOut, guests, name, surname, phone } = req.body;
         
-        // Validate required fields
         if (!roomType || !checkIn || !checkOut || !guests || !name || !surname || !phone) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Missing required fields' 
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields'
             });
+        }
+
+        const normalizedRoomType = String(roomType).toLowerCase();
+        if (!['small', 'big'].includes(normalizedRoomType)) {
+            return res.status(400).json({ success: false, error: 'Invalid room type' });
+        }
+
+        const guestsCount = Number(guests);
+        if (!Number.isFinite(guestsCount) || guestsCount <= 0) {
+            return res.status(400).json({ success: false, error: 'Guests must be a positive number' });
+        }
+
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+        if (isNaN(checkInDate.valueOf()) || isNaN(checkOutDate.valueOf()) || checkOutDate <= checkInDate) {
+            return res.status(400).json({ success: false, error: 'Invalid date range' });
         }
         
         // Create booking object with unconfirmed status
         const booking = {
             id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            roomType,
+            roomType: normalizedRoomType,
             roomId: null, // User bookings don't have specific room assigned
-            checkIn,
-            checkOut,
-            guests,
+            checkIn: checkInDate.toISOString().split('T')[0],
+            checkOut: checkOutDate.toISOString().split('T')[0],
+            guests: guestsCount,
             name: (name || '').trim(),
             surname: (surname || '').trim(),
             phone,
@@ -1953,13 +1803,12 @@ app.post('/book-room', async (req, res) => {
             status: 'unconfirmed' // User bookings start as unconfirmed
         };
         
-        // Save booking to Excel
-        const success = await addBookingToExcel(booking);
+        const success = await insertBookingRecord(booking);
         
         if (!success) {
             return res.status(500).json({ 
                 success: false, 
-                error: 'Failed to save booking to Excel' 
+                error: 'Failed to save booking' 
             });
         }
         
@@ -1981,159 +1830,42 @@ app.post('/book-room', async (req, res) => {
 // MENU MANAGEMENT FUNCTIONS
 // ============================
 
-// Read image mappings from JSON file
-function readImageMappings() {
+// Load menu items from database
+async function loadMenuItemsFromDb() {
     try {
-        if (fs.existsSync(MENU_IMAGES_MAPPING_FILE)) {
-            const data = fs.readFileSync(MENU_IMAGES_MAPPING_FILE, 'utf8');
-            return JSON.parse(data);
-        }
+        await ensureMenuSeeded();
+        const result = await db.query(
+            `SELECT dish_id, category, name, price, image_path
+             FROM menu_items
+             ORDER BY display_order, id`
+        );
+        return result.rows.map(row => ({
+            id: row.dish_id,
+            category: row.category,
+            name: row.name,
+            price: row.price,
+            image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null
+        }));
     } catch (error) {
-        console.error('Error reading image mappings:', error);
-    }
-    return {};
-}
-
-// Save image mappings to JSON file
-function saveImageMappings(mappings) {
-    try {
-        fs.writeFileSync(MENU_IMAGES_MAPPING_FILE, JSON.stringify(mappings, null, 2));
-        return true;
-    } catch (error) {
-        console.error('Error saving image mappings:', error);
-        return false;
-    }
-}
-
-// Parse menu from Excel file
-async function parseMenuFromExcel() {
-    try {
-        if (!fs.existsSync(MENU_FILE)) {
-            console.log('Menu file not found:', MENU_FILE);
-            return [];
-        }
-
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.readFile(MENU_FILE);
-        
-        // Get first worksheet
-        const worksheet = workbook.worksheets[0];
-        if (!worksheet) {
-            console.log('No worksheet found in menu file');
-            return [];
-        }
-
-        const menuItems = [];
-        const imageMappings = readImageMappings();
-        let idCounter = 1;
-
-        // Read rows (skip header row if exists)
-        worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-            // Skip header row (row 1)
-            if (rowNumber === 1) return;
-
-            try {
-                // Column A (1) = Category, Column B (2) = Name, Column C (3) = Price
-                const categoryCell = row.getCell(1);
-                const nameCell = row.getCell(2);
-                const priceCell = row.getCell(3);
-
-                const name = nameCell.value;
-                const price = priceCell.value;
-
-                // Skip rows with empty name or price
-                if (!name || name === '' || price === null || price === undefined || price === '') {
-                    return;
-                }
-
-                const category = (categoryCell.value && String(categoryCell.value).trim()) || 'Other';
-
-                // Extract English name (if there are multiple languages, take first/English part)
-                let englishName = String(name).trim();
-                if (englishName.includes('|')) {
-                    englishName = englishName.split('|')[0].trim();
-                }
-                if (englishName.includes('/')) {
-                    englishName = englishName.split('/')[0].trim();
-                }
-
-                // Convert price to number
-                let priceNum = parseFloat(price);
-                if (isNaN(priceNum)) {
-                    const priceMatch = String(price).match(/[\d.]+/);
-                    if (priceMatch) {
-                        priceNum = parseFloat(priceMatch[0]);
-                    } else {
-                        console.log(`Skipping row ${rowNumber}: Invalid price: ${price}`);
-                        return;
-                    }
-                }
-
-                const dishId = `dish-${idCounter++}`;
-                const imagePath = imageMappings[dishId] || null;
-
-                menuItems.push({
-                    id: dishId,
-                    category,
-                    name: englishName,
-                    price: priceNum,
-                    image: imagePath ? `/api/menu-images/${path.basename(imagePath)}` : null,
-                    rowNumber: rowNumber
-                });
-
-                // Store dishId -> rowNumber mapping in image mappings file
-                if (!imageMappings._rowMapping) {
-                    imageMappings._rowMapping = {};
-                }
-                imageMappings._rowMapping[dishId] = rowNumber;
-            } catch (rowError) {
-                console.error(`Error parsing row ${rowNumber}:`, rowError);
-            }
-        });
-
-        // Save row mappings
-        saveImageMappings(imageMappings);
-
-        console.log(`Parsed ${menuItems.length} menu items from Excel`);
-        return menuItems;
-    } catch (error) {
-        console.error('Error parsing menu from Excel:', error);
+        console.error('Error loading menu from database:', error);
         return [];
     }
 }
 
-// Update menu item name/price in Excel
-async function updateMenuItemInExcel(dishId, newName, newPrice) {
+async function updateMenuItemRecord(dishId, newName, newPrice) {
     try {
-        if (!fs.existsSync(MENU_FILE)) {
-            return { success: false, error: 'Menu file not found' };
+        const result = await db.query(
+            `UPDATE menu_items
+             SET name = $2, price = $3
+             WHERE dish_id = $1`,
+            [dishId, newName, newPrice]
+        );
+        if (result.rowCount === 0) {
+            return { success: false, error: 'Dish not found' };
         }
-
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.readFile(MENU_FILE);
-        const worksheet = workbook.worksheets[0];
-        
-        if (!worksheet) {
-            return { success: false, error: 'No worksheet found' };
-        }
-
-        // Get row number from mapping
-        const imageMappings = readImageMappings();
-        const rowNumber = imageMappings._rowMapping?.[dishId];
-
-        if (!rowNumber) {
-            return { success: false, error: 'Dish row number not found. Please reload menu.' };
-        }
-
-        // Update column B (name) and column C (price)
-        const row = worksheet.getRow(rowNumber);
-        row.getCell(2).value = newName;
-        row.getCell(3).value = newPrice;
-
-        await workbook.xlsx.writeFile(MENU_FILE);
         return { success: true };
     } catch (error) {
-        console.error('Error updating menu item in Excel:', error);
+        console.error('Error updating menu item:', error);
         return { success: false, error: error.message };
     }
 }
@@ -2164,7 +1896,7 @@ app.get('/api/menu', async (req, res) => {
         }
         
         // Parse menu and cache it
-        const menuItems = await parseMenuFromExcel();
+        const menuItems = await loadMenuItemsFromDb();
         menuCache = menuItems;
         menuCacheTime = now;
         
@@ -2191,16 +1923,29 @@ app.post('/api/menu/:id/image', (req, res, next) => {
 }, upload.single('image'), async (req, res) => {
     try {
         const dishId = req.params.id;
-        
+
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
         }
 
-        const imageMappings = readImageMappings();
-        imageMappings[dishId] = req.file.path;
-        saveImageMappings(imageMappings);
-        
-        // Clear menu cache when image is updated
+        const existing = await db.query('SELECT image_path FROM menu_items WHERE dish_id = $1', [dishId]);
+        if (existing.rowCount === 0) {
+            return res.status(404).json({ error: 'Dish not found' });
+        }
+
+        const previousImage = existing.rows[0].image_path;
+        if (previousImage) {
+            const previousPath = path.join(MENU_IMAGES_DIR, previousImage);
+            if (fs.existsSync(previousPath)) {
+                fs.unlink(previousPath, () => {});
+            }
+        }
+
+        await db.query(
+            'UPDATE menu_items SET image_path = $2 WHERE dish_id = $1',
+            [dishId, req.file.filename]
+        );
+
         clearMenuCache();
 
         res.json({
@@ -2225,42 +1970,22 @@ const menuAuth = (req, res, next) => {
 menuApiRouter.delete('/:id', menuAuth, async (req, res) => {
     try {
         const dishId = req.params.id;
-        if (!fs.existsSync(MENU_FILE)) {
-            return res.status(404).json({ error: 'Menu file not found' });
-        }
-        let imageMappings = readImageMappings();
-        let rowNumber = imageMappings._rowMapping?.[dishId];
-
-        if (!rowNumber) {
-            await parseMenuFromExcel();
-            imageMappings = readImageMappings();
-            rowNumber = imageMappings._rowMapping?.[dishId];
-        }
-
-        if (!rowNumber) {
+        const result = await db.query(
+            'DELETE FROM menu_items WHERE dish_id = $1 RETURNING image_path',
+            [dishId]
+        );
+        if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Dish not found' });
         }
 
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.readFile(MENU_FILE);
-        const worksheet = workbook.worksheets[0];
-        if (!worksheet) {
-            return res.status(500).json({ error: 'No worksheet found' });
-        }
-
-        worksheet.spliceRows(rowNumber, 1);
-
-        delete imageMappings[dishId];
-        if (imageMappings._rowMapping) {
-            delete imageMappings._rowMapping[dishId];
-            for (const id in imageMappings._rowMapping) {
-                if (imageMappings._rowMapping[id] > rowNumber) {
-                    imageMappings._rowMapping[id]--;
-                }
+        const imagePath = result.rows[0].image_path;
+        if (imagePath) {
+            const fullPath = path.join(MENU_IMAGES_DIR, imagePath);
+            if (fs.existsSync(fullPath)) {
+                fs.unlink(fullPath, () => {});
             }
         }
-        saveImageMappings(imageMappings);
-        await workbook.xlsx.writeFile(MENU_FILE);
+
         clearMenuCache();
 
         res.json({ success: true });
@@ -2299,7 +2024,7 @@ app.put('/api/menu/:id', (req, res, next) => {
             return res.status(400).json({ error: 'Invalid price' });
         }
 
-        const result = await updateMenuItemInExcel(dishId, name, priceNum);
+        const result = await updateMenuItemRecord(dishId, name, priceNum);
         
         if (result.success) {
             // Clear menu cache when menu is updated
@@ -2325,9 +2050,22 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend server running on http://0.0.0.0:${PORT}`);
     startTelegramPolling();
     // Parse menu on startup
-    parseMenuFromExcel().then(items => {
-        console.log(`Menu loaded: ${items.length} items`);
-    });
-    // Migrate existing orders from JSON to Excel on first run
-    migrateOrdersToExcel().catch(e => console.error('Orders migration error:', e));
+    loadMenuItemsFromDb()
+        .then(items => {
+            console.log(`Menu loaded: ${items.length} items`);
+        })
+        .catch(err => console.error('Failed to preload menu items:', err));
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
