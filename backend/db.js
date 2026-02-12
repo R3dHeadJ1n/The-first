@@ -11,3 +11,4 @@ module.exports = {
   query: (text, params) => pool.query(text, params),
   pool,
 };
+/* added comment for main branch*/
