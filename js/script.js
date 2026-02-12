@@ -282,7 +282,7 @@ document.addEventListener('click', (e) => {
 });
 
 // Backend API Configuration
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Room prices per night (Bath)
 const ROOM_PRICES = { small: 700, big: 900 };
