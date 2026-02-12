@@ -150,7 +150,7 @@
 
         function initOrdersPage() {
             document.getElementById('ordersBackBtn').addEventListener('click', () => {
-                window.location.href = `${BACKEND_URL}/admin.html`;
+                window.location.href = `${window.location.origin}/admin.html`;
             });
             document.getElementById('refreshOrdersBtn').addEventListener('click', loadOrders);
             document.getElementById('addOrderBtn').addEventListener('click', () => openOrderModal());

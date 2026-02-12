@@ -147,7 +147,7 @@
 
         function init() {
             document.getElementById('backToDashboard').addEventListener('click', () => {
-                window.location.href = `${BACKEND_URL}/admin.html`;
+                window.location.href = `${window.location.origin}/admin.html`;
             });
             document.getElementById('refreshBookingsBtn').addEventListener('click', loadBookings);
             document.getElementById('addBookingBtn').addEventListener('click', () => openBookingModal());
@@ -168,7 +168,7 @@
             const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
             const tokenExists = Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
             if (!sessionAuthed && !tokenExists) {
-                window.location.href = `${BACKEND_URL}/admin.html`;
+                window.location.href = `${window.location.origin}/admin.html`;
                 return false;
             }
             return true;
