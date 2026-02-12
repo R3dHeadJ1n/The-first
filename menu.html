@@ -536,7 +536,13 @@
 
     <script>
         // Backend API Configuration
-        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+        let BACKEND_URL;
+
+async function initBackend() {
+  const res = await fetch("/config.json");
+  const cfg = await res.json();
+  BACKEND_URL = cfg.backend;
+}
         
         // Clean up any old sessionStorage on page load
         try {
@@ -1305,20 +1311,20 @@
         });
         
         // Start initialization when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                console.log('DOMContentLoaded - starting initialization');
-                initializePage().catch(err => {
-                    console.error('Failed to initialize page:', err);
-                });
-            });
-        } else {
-            // DOM already loaded
-            console.log('DOM already loaded - starting initialization');
-            initializePage().catch(err => {
-                console.error('Failed to initialize page:', err);
-            });
-        }
+        async function startPage() {
+    await initBackend();
+    await initializePage();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOMContentLoaded - starting initialization');
+        startPage().catch(console.error);
+    });
+} else {
+    console.log('DOM already loaded - starting initialization');
+    startPage().catch(console.error);
+}
     </script>
 </body>
 </html>

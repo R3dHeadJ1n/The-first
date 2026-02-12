@@ -121,7 +121,13 @@
     </div>
 
     <script>
-        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+        let BACKEND_URL;
+
+async function initBackend() {
+  const res = await fetch("/config.json");
+  const cfg = await res.json();
+  BACKEND_URL = cfg.backend;
+}
         const AUTH_KEY = 'admin_authenticated';
         const AUTH_TOKEN_KEY = 'admin_auth_token';
         const bookingsTableBody = document.querySelector('#bookingsTable tbody');
@@ -143,7 +149,12 @@
 
         let bookingsCache = [];
 
-        init();
+        start();
+
+async function start() {
+  await initBackend();
+  init();
+}
 
         function init() {
             document.getElementById('backToDashboard').addEventListener('click', () => {

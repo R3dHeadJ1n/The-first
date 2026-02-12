@@ -492,7 +492,13 @@
         
         // Storage key for authentication
         const AUTH_KEY = 'admin_authenticated';
-        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+        let BACKEND_URL;
+
+async function initBackend() {
+  const res = await fetch("/config.json");
+  const cfg = await res.json();
+  BACKEND_URL = cfg.backend;
+}
         
         let adminCheckInPicker = null;
         let adminCheckOutPicker = null;
@@ -1461,7 +1467,10 @@
         });
 
         // Check auth on page load
-        checkAuth();
+        (async () => {
+    await initBackend();
+    checkAuth();
+})();
     </script>
 </body>
 </html>
