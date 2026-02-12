@@ -1423,9 +1423,9 @@
         const menuBtn = document.getElementById('menuBtn');
         if (menuBtn) {
             menuBtn.addEventListener('click', () => {
-                const menuWindow = window.open(`${BACKEND_URL}/admin-menu.html`, '_blank');
+                const menuWindow = window.open(`${window.location.origin}/admin-menu.html`, '_blank');
                 if (!menuWindow || menuWindow.closed || typeof menuWindow.closed === 'undefined') {
-                    window.location.href = `${BACKEND_URL}/admin-menu.html`;
+                    window.location.href = `${window.location.origin}/admin-menu.html`;
                 }
             });
         }
