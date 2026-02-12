@@ -1,10 +1,16 @@
 const fs = require("fs");
+const path = require("path");
 
-let template = fs.readFileSync("config.template.json", "utf8");
+const templatePath = path.join(__dirname, "config.template.json");
+const outputPath = path.join(__dirname, "config.json");
 
-template = template.replace(
+const template = fs.readFileSync(templatePath, "utf8");
+
+const result = template.replace(
   "__BACKEND_URL__",
-  process.env.BACKEND_URL
+  process.env.REACT_APP_BACKEND_URL
 );
 
-fs.writeFileSync("config.json", template);
+fs.writeFileSync(outputPath, result);
+
+console.log("config.json generated");
