@@ -492,7 +492,7 @@
         
         // Storage key for authentication
         const AUTH_KEY = 'admin_authenticated';
-        const BACKEND_URL = 'https://the-first-production.up.railway.app';
+        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;;
         
         let adminCheckInPicker = null;
         let adminCheckOutPicker = null;
