@@ -89,11 +89,16 @@
         const rangeTo = parseLocalDate(dateTo);
         if (!rangeFrom || !rangeTo || rangeTo < rangeFrom) return result;
 
-        const statusFilter = (statusFilterEl && statusFilterEl.value) ? statusFilterEl.value.trim().toLowerCase() : 'confirmed';
+        const statusFilter = (statusFilterEl && statusFilterEl.value) ? String(statusFilterEl.value).trim().toLowerCase() : 'confirmed';
 
         for (const b of bookings) {
-            const status = (b.status || '').toLowerCase();
-            if (statusFilter && status !== statusFilter) continue;
+            const status = String(b.status || '').trim().toLowerCase();
+            // When filter is "confirmed", exclude deleted/cancelled; require status match
+            if (statusFilter === 'confirmed') {
+                if (status !== 'confirmed') continue;
+            } else if (statusFilter) {
+                if (status !== statusFilter) continue;
+            }
 
             const checkIn = b.checkIn || b.checkin_date;
             const checkOut = b.checkOut || b.checkout_date;
