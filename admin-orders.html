@@ -114,7 +114,9 @@
 
     <template id="itemRowTemplate">
         <div class="item-row">
-            <input type="text" class="item-name" placeholder="Item name" required>
+            <select class="item-dish" required>
+                <option value="">— Select dish —</option>
+            </select>
             <input type="number" class="item-qty" placeholder="Qty" min="1" step="1" required>
             <input type="number" class="item-price" placeholder="Price" min="0" step="1" required>
             <button type="button" class="ghost-btn remove-item">×</button>
@@ -151,10 +153,21 @@ async function initBackend() {
         const closeOrderModalBtn = document.getElementById('closeOrderModal');
 
         let ordersCache = [];
+        let menuItemsCache = [];
 
-    
+        async function loadMenuItems() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/menu`, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    menuItemsCache = data.items || data || [];
+                }
+            } catch (e) {
+                console.error('Failed to load menu items:', e);
+            }
+        }
 
-        function initOrdersPage() {
+        async function initOrdersPage() {
             document.getElementById('ordersBackBtn').addEventListener('click', () => {
                 window.location.href = `${window.location.origin}/admin.html`;
             });
@@ -177,6 +190,7 @@ async function initBackend() {
                 }
             });
             if (!ensureOrdersAuth()) return;
+            await loadMenuItems();
             loadOrders();
         }
 
@@ -285,7 +299,7 @@ async function initBackend() {
             document.getElementById('orderCommunication').value = order?.communication || '';
             document.getElementById('orderStatus').value = order?.status || 'unconfirmed';
             itemsContainer.innerHTML = '';
-            const items = order?.items && order.items.length ? order.items : [{ name: '', quantity: 1, price: 0 }];
+            const items = order?.items && order.items.length ? order.items : [{ dish_id: '', quantity: 1, price: 0 }];
             items.forEach(item => addItemRow(item));
             updateItemsTotal();
             orderModalTitle.textContent = order ? 'Edit order' : 'Add order';
@@ -297,10 +311,28 @@ async function initBackend() {
             orderModal.classList.remove('open');
         }
 
-        function addItemRow(item = { name: '', quantity: 1, price: 0 }) {
+        function addItemRow(item = { dish_id: '', quantity: 1, price: 0 }) {
             const template = document.getElementById('itemRowTemplate');
             const fragment = template.content.cloneNode(true);
-            fragment.querySelector('.item-name').value = item.name || '';
+            const dishSelect = fragment.querySelector('.item-dish');
+            menuItemsCache.forEach(mi => {
+                const opt = document.createElement('option');
+                opt.value = mi.id;
+                opt.textContent = `${mi.name} (${(mi.price || 0).toFixed(0)} THB)`;
+                if (String(mi.id) === String(item.dish_id || item.dishId)) {
+                    opt.selected = true;
+                }
+                dishSelect.appendChild(opt);
+            });
+            dishSelect.addEventListener('change', function() {
+                const selected = menuItemsCache.find(m => String(m.id) === this.value);
+                const row = this.closest('.item-row');
+                if (selected && row) {
+                    const priceInput = row.querySelector('.item-price');
+                    if (priceInput && (!priceInput.value || priceInput.value === '0')) priceInput.value = selected.price || 0;
+                }
+                updateItemsTotal();
+            });
             fragment.querySelector('.item-qty').value = item.quantity || 1;
             fragment.querySelector('.item-price').value = item.price || 0;
             itemsContainer.appendChild(fragment);
@@ -308,11 +340,12 @@ async function initBackend() {
         }
 
         function collectItems() {
-            return Array.from(itemsContainer.querySelectorAll('.item-row')).map(row => ({
-                name: row.querySelector('.item-name').value.trim(),
-                quantity: Number(row.querySelector('.item-qty').value),
-                price: Number(row.querySelector('.item-price').value)
-            })).filter(item => item.name && item.quantity > 0 && item.price >= 0);
+            return Array.from(itemsContainer.querySelectorAll('.item-row')).map(row => {
+                const dishId = row.querySelector('.item-dish')?.value?.trim();
+                const quantity = Number(row.querySelector('.item-qty')?.value);
+                const price = Number(row.querySelector('.item-price')?.value);
+                return { dish_id: dishId, quantity, price };
+            }).filter(item => item.dish_id && item.quantity > 0 && item.price >= 0);
         }
 
         function updateItemsTotal() {

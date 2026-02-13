@@ -328,7 +328,7 @@ async function initBackend() {
             const items = [];
             for (const dishId in cart) {
                 const item = cart[dishId];
-                items.push({ name: item.name, quantity: item.quantity, price: item.price });
+                items.push({ dish_id: dishId, quantity: item.quantity, price: item.price });
             }
 
             const submitBtn = document.getElementById('checkoutSubmit');

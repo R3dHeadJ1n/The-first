@@ -936,16 +936,16 @@ app.post('/admin/orders', async (req, res) => {
         }
 
         const sanitizedItems = items
-            .filter(item => item && item.name && Number.isFinite(Number(item.quantity)) && Number.isFinite(Number(item.price)))
+            .filter(item => item && (item.dish_id || item.dishId) && Number.isFinite(Number(item.quantity)) && Number.isFinite(Number(item.price)))
             .map(item => ({
-                name: String(item.name).trim(),
+                dish_id: String(item.dish_id || item.dishId).trim(),
                 quantity: Number(item.quantity),
                 price: Number(item.price)
             }))
-            .filter(item => item.name && item.quantity > 0 && item.price >= 0);
+            .filter(item => item.dish_id && item.quantity > 0 && item.price >= 0);
 
         if (sanitizedItems.length === 0) {
-            return res.status(400).json({ error: 'All items must include name, quantity (>0), and price (>=0)' });
+            return res.status(400).json({ error: 'All items must include dish_id, quantity (>0), and price (>=0)' });
         }
 
         const total = sanitizedItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
@@ -1418,7 +1418,8 @@ async function readOrders() {
                 COALESCE(
                     json_agg(
                         json_build_object(
-                            'name', oi.name,
+                            'dish_id', oi.dish_id,
+                            'name', COALESCE(mi.name, oi.dish_id),
                             'quantity', oi.quantity,
                             'price', oi.price,
                             'subtotal', oi.subtotal
@@ -1428,6 +1429,7 @@ async function readOrders() {
                 ) AS items
             FROM orders o
             LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN menu_items mi ON mi.dish_id = oi.dish_id
             GROUP BY o.id
             ORDER BY o.created_at DESC
         `);
@@ -1463,7 +1465,8 @@ async function fetchOrderByPublicId(orderId) {
             COALESCE(
                 json_agg(
                     json_build_object(
-                        'name', oi.name,
+                        'dish_id', oi.dish_id,
+                        'name', COALESCE(mi.name, oi.dish_id),
                         'quantity', oi.quantity,
                         'price', oi.price,
                         'subtotal', oi.subtotal
@@ -1473,6 +1476,7 @@ async function fetchOrderByPublicId(orderId) {
             ) AS items
          FROM orders o
          LEFT JOIN order_items oi ON oi.order_id = o.id
+         LEFT JOIN menu_items mi ON mi.dish_id = oi.dish_id
          WHERE o.public_id = $1
          GROUP BY o.id`,
         [orderId]
@@ -1517,9 +1521,9 @@ async function insertOrderWithItems(orderPayload) {
         const orderDbId = orderResult.rows[0].id;
         for (const item of items) {
             await client.query(
-                `INSERT INTO order_items (order_id, name, quantity, price)
+                `INSERT INTO order_items (order_id, dish_id, quantity, price)
                  VALUES ($1, $2, $3, $4)`,
-                [orderDbId, item.name, item.quantity, item.price]
+                [orderDbId, item.dish_id || item.dishId, item.quantity, item.price]
             );
         }
         await client.query('COMMIT');
@@ -1573,16 +1577,16 @@ async function updateOrderRecord(orderId, updates = {}) {
 
         if (itemsProvided) {
             const sanitizedItems = updates.items
-                .filter(item => item && item.name && Number.isFinite(Number(item.quantity)) && Number.isFinite(Number(item.price)))
+                .filter(item => item && (item.dish_id || item.dishId) && Number.isFinite(Number(item.quantity)) && Number.isFinite(Number(item.price)))
                 .map(item => ({
-                    name: String(item.name).trim(),
+                    dish_id: String(item.dish_id || item.dishId).trim(),
                     quantity: Number(item.quantity),
                     price: Number(item.price)
                 }))
-                .filter(item => item.name && item.quantity > 0 && item.price >= 0);
+                .filter(item => item.dish_id && item.quantity > 0 && item.price >= 0);
 
             if (sanitizedItems.length === 0) {
-                throw new Error('Items array must include at least one valid item');
+                throw new Error('Items array must include at least one valid item with dish_id');
             }
 
             updates.items = sanitizedItems;
@@ -1610,9 +1614,9 @@ async function updateOrderRecord(orderId, updates = {}) {
             await client.query('DELETE FROM order_items WHERE order_id = $1', [orderDbId]);
             for (const item of updates.items) {
                 await client.query(
-                    `INSERT INTO order_items (order_id, name, quantity, price)
+                    `INSERT INTO order_items (order_id, dish_id, quantity, price)
                      VALUES ($1, $2, $3, $4)`,
-                    [orderDbId, item.name, item.quantity, item.price]
+                    [orderDbId, item.dish_id, item.quantity, item.price]
                 );
             }
         }
@@ -2119,15 +2123,20 @@ app.post('/api/order-food', async (req, res) => {
 
         let total = 0;
         const validItems = items.filter(item => {
-            if (!item || !item.name || typeof item.quantity !== 'number' || typeof item.price !== 'number') {
+            const dishId = item?.dish_id || item?.dishId;
+            if (!item || !dishId || typeof item.quantity !== 'number' || typeof item.price !== 'number') {
                 return false;
             }
             total += item.price * item.quantity;
             return true;
-        });
+        }).map(item => ({
+            dish_id: String(item.dish_id || item.dishId).trim(),
+            quantity: item.quantity,
+            price: item.price
+        }));
 
         if (validItems.length === 0) {
-            return res.status(400).json({ success: false, error: 'No valid order items' });
+            return res.status(400).json({ success: false, error: 'No valid order items (each item needs dish_id, quantity, price)' });
         }
 
         const orderId = 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
@@ -2143,9 +2152,15 @@ app.post('/api/order-food', async (req, res) => {
 
         await insertOrderWithItems(orderRecord);
 
+        const order = await fetchOrderByPublicId(orderId);
+        const itemsForTelegram = (order?.items || validItems).map(it => ({
+            ...it,
+            name: it.name || it.dish_id || 'Unknown'
+        }));
+
         const commLabels = { phone: 'Phone call', whatsapp: 'WhatsApp', telegram: 'Telegram', line: 'Line' };
         const commLabel = commLabels[communication] || communication || '';
-        sendFoodOrderTelegramMessage(validItems, total, customerName, customerPhone, commLabel, orderId);
+        sendFoodOrderTelegramMessage(itemsForTelegram, total, customerName, customerPhone, commLabel, orderId);
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing food order:', error);

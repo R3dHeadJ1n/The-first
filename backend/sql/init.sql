@@ -36,13 +36,14 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,
     order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
+    dish_id TEXT NOT NULL,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     price INTEGER NOT NULL CHECK (price >= 0),
     subtotal INTEGER GENERATED ALWAYS AS (quantity * price) STORED
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_dish_id ON order_items(dish_id);
 
 CREATE TABLE IF NOT EXISTS menu_items (
     id SERIAL PRIMARY KEY,
