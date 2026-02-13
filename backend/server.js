@@ -1053,7 +1053,7 @@ app.delete('/admin/booking/:id', async (req, res) => {
 // GET /admin/available-rooms - Get available rooms for a date range
 app.get('/admin/available-rooms', async (req, res) => {
     try {
-        const { roomType, checkIn, checkOut } = req.query;
+        const { roomType, checkIn, checkOut, excludeBookingId } = req.query;
         
         if (!roomType || !checkIn || !checkOut) {
             return res.status(400).json({ error: 'roomType, checkIn, and checkOut are required' });
@@ -1093,6 +1093,9 @@ app.get('/admin/available-rooms', async (req, res) => {
         let skippedBookings = 0;
         
         allBookings.forEach(booking => {
+            if (excludeBookingId && booking.id === excludeBookingId) {
+                return; // Exclude this booking (e.g. when editing)
+            }
             // Skip unconfirmed and deleted bookings
             const status = booking.status || 'active'; // Default to active if status is missing
             if (status === 'unconfirmed' || status === 'deleted') {

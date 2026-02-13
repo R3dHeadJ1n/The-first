@@ -293,7 +293,7 @@
         if (!ensureAuth()) return;
         setDefaultDateRange();
         backToDashboardEl && backToDashboardEl.addEventListener('click', () => {
-            window.location.href = `${window.location.origin}/admin.html`;
+            window.location.href = `${window.location.origin}/admin-bookings.html`;
         });
         refreshBtn && refreshBtn.addEventListener('click', loadBookings);
         applyFiltersBtn && applyFiltersBtn.addEventListener('click', applyFilters);
