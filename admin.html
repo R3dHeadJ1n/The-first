@@ -204,10 +204,6 @@
             border: 1px solid #bee5eb;
         }
 
-        .restart-btn:hover {
-            background-color: #f57c00 !important;
-        }
-
         .server-status {
             background-color: #f5f5f5;
             border: 1px solid #ddd;
@@ -426,8 +422,6 @@
                 <button class="btn" id="menuBtn" style="background-color: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">MENU</button>
                 <button class="btn" id="allBookingsBtn" style="background-color: #9c27b0; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">All Bookings</button>
                 <button class="btn" id="allOrdersBtn" style="background-color: #e91e63; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">All Orders</button>
-                <button class="btn" id="analyticsBtn" style="background-color: #009688; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Analytics</button>
-                <button class="restart-btn" id="restartBtn" style="background-color: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Restart Backend</button>
                 <button class="logout-btn" id="logoutBtn">Logout</button>
             </div>
         </div>
@@ -1334,58 +1328,6 @@ async function initBackend() {
             }
         });
 
-        // Handle restart backend
-        const restartBtn = document.getElementById('restartBtn');
-        if (restartBtn) {
-            restartBtn.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to restart the backend server? This will temporarily disconnect all users.')) {
-                    return;
-                }
-                
-                try {
-                    showAdminMessage('Restarting backend server...', 'info');
-                    const response = await fetch(`${BACKEND_URL}/admin/restart`, {
-                        method: 'POST'
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        showAdminMessage(data.message || 'Backend restart initiated. Please wait a few seconds...', 'success');
-                        
-                        // Update status immediately to show restarting
-                        const statusEl = document.getElementById('serverStatus');
-                        const textEl = statusEl?.querySelector('.status-text');
-                        if (textEl) {
-                            textEl.textContent = 'Restarting...';
-                        }
-                        
-                        // Check status after 10 seconds
-                        setTimeout(() => {
-                            checkServerStatus();
-                        }, 10000);
-                    } else {
-                        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                        showAdminMessage(errorData.error || 'Error restarting server', 'error');
-                    }
-                } catch (error) {
-                    console.error('Error restarting server:', error);
-                    showAdminMessage('Error connecting to server. Server may be restarting...', 'info');
-                    
-                    // Update status immediately to show restarting
-                    const statusEl = document.getElementById('serverStatus');
-                    const textEl = statusEl?.querySelector('.status-text');
-                    if (textEl) {
-                        textEl.textContent = 'Restarting...';
-                    }
-                    
-                    // Check status after 10 seconds
-                    setTimeout(() => {
-                        checkServerStatus();
-                    }, 10000);
-                }
-            });
-        }
-        
         // Check server status and update display
         async function checkServerStatus() {
             const statusEl = document.getElementById('serverStatus');
@@ -1449,13 +1391,6 @@ async function initBackend() {
                 window.location.href = `${window.location.origin}/admin-orders.html`;
             });
         }
-        const analyticsBtn = document.getElementById('analyticsBtn');
-        if (analyticsBtn) {
-            analyticsBtn.addEventListener('click', () => {
-                window.location.href = `${window.location.origin}/restaurant-analytics.html`;
-            });
-        }
-
         // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {
             // Clear authentication

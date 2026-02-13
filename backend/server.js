@@ -572,32 +572,6 @@ app.get('/admin/status', (req, res) => {
     }
 });
 
-// POST /admin/restart - Restart the backend server
-// Note: This will exit the process. If running with start-server.bat, it will auto-restart in the same window.
-app.post('/admin/restart', async (req, res) => {
-    try {
-        console.log('Restart request received from admin');
-        
-        // Send response immediately before restarting
-        res.json({ 
-            success: true, 
-            message: 'Backend server restart initiated. Server will exit and restart in 2 seconds.' 
-        });
-        
-        // Give time for response to be sent, then exit
-        // If running with start-server.bat wrapper, it will automatically restart in the same window
-        setTimeout(() => {
-            console.log('Restarting server... Exiting process.');
-            console.log('If running with start-server.bat, server will restart automatically in the same window.');
-            process.exit(0);
-        }, 2000);
-        
-    } catch (error) {
-        console.error('Error in restart endpoint:', error);
-        res.status(500).json({ success: false, error: 'Failed to restart server' });
-    }
-});
-
 // Admin login endpoint
 app.post('/admin/login', (req, res) => {
     try {
