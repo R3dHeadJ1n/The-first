@@ -16,6 +16,7 @@
             </div>
             <div class="header-actions">
                 <button class="ghost-btn" id="backToDashboard">← Back to dashboard</button>
+                <button class="ghost-btn" id="revenueBtn">Revenue Analytics</button>
                 <button class="primary-btn" id="addBookingBtn">+ New booking</button>
             </div>
         </header>
@@ -159,6 +160,9 @@ async function start() {
         function init() {
             document.getElementById('backToDashboard').addEventListener('click', () => {
                 window.location.href = `${window.location.origin}/admin.html`;
+            });
+            document.getElementById('revenueBtn')?.addEventListener('click', () => {
+                window.location.href = `${window.location.origin}/admin-revenue.html`;
             });
             document.getElementById('refreshBookingsBtn').addEventListener('click', loadBookings);
             document.getElementById('addBookingBtn').addEventListener('click', () => openBookingModal());
