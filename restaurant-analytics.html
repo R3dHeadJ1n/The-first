@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Analytics</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="admin-table-body">
+    <div class="admin-table-shell">
+        <header class="admin-table-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Restaurant Analytics</h1>
+                <p class="muted">Sales performance and dish popularity</p>
+            </div>
+            <div class="header-actions">
+                <button class="ghost-btn" id="backToDashboard">← Back to dashboard</button>
+                <button class="primary-btn" id="refreshBtn">Refresh</button>
+            </div>
+        </header>
+
+        <section class="admin-table-toolbar revenue-toolbar">
+            <input type="date" id="dateFrom" aria-label="Date from">
+            <input type="date" id="dateTo" aria-label="Date to">
+            <select id="categoryFilter">
+                <option value="">All categories</option>
+            </select>
+            <select id="statusFilter" disabled title="Restaurant analytics show completed orders only">
+                <option value="completed" selected>Completed</option>
+            </select>
+            <button class="ghost-btn" id="applyFiltersBtn">Apply</button>
+        </section>
+
+        <section class="revenue-kpi-row restaurant-kpi-row">
+            <div class="revenue-kpi-card">
+                <span class="revenue-kpi-label">Total Revenue</span>
+                <span class="revenue-kpi-value" id="kpiTotalRevenue">— THB</span>
+            </div>
+            <div class="revenue-kpi-card">
+                <span class="revenue-kpi-label">Total Orders</span>
+                <span class="revenue-kpi-value" id="kpiTotalOrders">—</span>
+            </div>
+            <div class="revenue-kpi-card">
+                <span class="revenue-kpi-label">Average Order Value</span>
+                <span class="revenue-kpi-value" id="kpiAOV">— THB</span>
+            </div>
+            <div class="revenue-kpi-card">
+                <span class="revenue-kpi-label">Total Dishes Sold</span>
+                <span class="revenue-kpi-value" id="kpiDishesSold">—</span>
+            </div>
+        </section>
+
+        <section class="admin-table-card revenue-chart-card">
+            <h3 class="revenue-chart-title">Daily Revenue</h3>
+            <div class="revenue-chart-wrap">
+                <canvas id="dailyRevenueChart"></canvas>
+            </div>
+        </section>
+
+        <section class="admin-table-card revenue-chart-card">
+            <h3 class="revenue-chart-title">Top Selling Dishes</h3>
+            <div class="revenue-chart-wrap" style="height: 400px;">
+                <canvas id="topDishesChart"></canvas>
+            </div>
+        </section>
+
+        <section class="admin-table-card">
+            <h3 class="revenue-table-title">Top Dishes by Category</h3>
+            <div class="table-scroll">
+                <table class="data-table" id="topDishesTable">
+                    <thead>
+                        <tr>
+                            <th>Dish Name</th>
+                            <th>Category</th>
+                            <th>Quantity Sold</th>
+                            <th>Revenue (THB)</th>
+                            <th>Avg Price</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="table-empty" id="analyticsEmpty">Select date range and click Apply</div>
+        </section>
+        <div id="analyticsToast" class="table-toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <script src="js/restaurant-analytics.js"></script>
+</body>
+</html>

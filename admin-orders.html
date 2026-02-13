@@ -16,6 +16,7 @@
             </div>
             <div class="header-actions">
                 <button class="ghost-btn" id="ordersBackBtn">← Back to dashboard</button>
+                <button class="ghost-btn" id="analyticsBtn">Analytics</button>
                 <button class="primary-btn" id="addOrderBtn">+ New order</button>
             </div>
         </header>
@@ -172,6 +173,9 @@ async function initBackend() {
                 window.location.href = `${window.location.origin}/admin.html`;
             });
             document.getElementById('refreshOrdersBtn').addEventListener('click', loadOrders);
+            document.getElementById('analyticsBtn')?.addEventListener('click', () => {
+                window.location.href = `${window.location.origin}/restaurant-analytics.html`;
+            });
             document.getElementById('addOrderBtn').addEventListener('click', () => openOrderModal());
             ordersSearch.addEventListener('input', renderOrders);
             ordersStatusFilter.value = 'completed';
