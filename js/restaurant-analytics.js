@@ -24,7 +24,6 @@
     const kpiTotalRevenue = document.getElementById('kpiTotalRevenue');
     const kpiTotalOrders = document.getElementById('kpiTotalOrders');
     const kpiAOV = document.getElementById('kpiAOV');
-    const kpiDishesSold = document.getElementById('kpiDishesSold');
     const topDishesBody = document.querySelector('#topDishesTable tbody');
     const analyticsEmptyEl = document.getElementById('analyticsEmpty');
     const toastEl = document.getElementById('analyticsToast');
@@ -230,7 +229,6 @@
         kpiTotalRevenue.textContent = formatMoney(data.totalRevenue);
         kpiTotalOrders.textContent = formatNum(data.totalOrders);
         kpiAOV.textContent = formatMoney(data.aov);
-        kpiDishesSold.textContent = formatNum(data.totalDishesSold);
     }
 
     function renderDailyChart(dailyRevenue, dateFrom, dateTo) {
@@ -333,7 +331,6 @@
                 <td>${escapeHtml(d.category)}</td>
                 <td>${formatNum(d.quantity)}</td>
                 <td>${formatMoney(d.revenue)}</td>
-                <td>${formatMoney(d.avgPrice)}</td>
             </tr>
         `).join('');
     }
