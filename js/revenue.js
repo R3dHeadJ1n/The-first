@@ -274,7 +274,7 @@
         const now = new Date();
         const toStr = formatDate(now);
         const from = new Date(now);
-        from.setMonth(from.getMonth() - 1);
+        from.setDate(from.getDate() - 30);
         const fromStr = formatDate(from);
         dateFromEl.value = fromStr;
         dateToEl.value = toStr;
