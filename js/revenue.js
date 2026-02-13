@@ -19,16 +19,13 @@
     // DOM refs
     let chart = null;
     let bookingsCache = [];
-    let filterDebounceTimer = null;
 
     const dateFromEl = document.getElementById('dateFrom');
     const dateToEl = document.getElementById('dateTo');
-    const statusFilterEl = document.getElementById('statusFilter');
     const applyFiltersBtn = document.getElementById('applyFiltersBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const backToDashboardEl = document.getElementById('backToDashboard');
     const kpiTotalRevenue = document.getElementById('kpiTotalRevenue');
-    const kpiADR = document.getElementById('kpiADR');
     const kpiOccupancy = document.getElementById('kpiOccupancy');
     const kpiRevPAR = document.getElementById('kpiRevPAR');
     const dailyAnalyticsBody = document.querySelector('#dailyAnalyticsTable tbody');
@@ -95,16 +92,9 @@
         const rangeTo = parseLocalDate(dateTo);
         if (!rangeFrom || !rangeTo || rangeTo < rangeFrom) return result;
 
-        const statusFilter = (statusFilterEl && statusFilterEl.value) ? String(statusFilterEl.value).trim().toLowerCase() : 'confirmed';
-
         for (const b of bookings) {
             const status = String(b.status || '').trim().toLowerCase();
-            // When filter is "confirmed", exclude deleted/cancelled; require status match
-            if (statusFilter === 'confirmed') {
-                if (status !== 'confirmed') continue;
-            } else if (statusFilter) {
-                if (status !== statusFilter) continue;
-            }
+            if (status !== 'confirmed') continue;
 
             const checkIn = b.checkIn || b.checkin_date;
             const checkOut = b.checkOut || b.checkout_date;
@@ -136,12 +126,10 @@
             const row = result[d] || { revenue: 0, roomKeys: new Set() };
             const roomsSold = row.roomKeys.size;
             const occupancy = TOTAL_ROOMS > 0 ? (roomsSold / TOTAL_ROOMS) * 100 : 0;
-            const adr = roomsSold > 0 ? row.revenue / roomsSold : 0;
             aggregated[d] = {
                 revenue: row.revenue,
                 roomsSold,
-                occupancy,
-                adr
+                occupancy
             };
         }
         return aggregated;
@@ -153,11 +141,9 @@
     function computeKPIs(daily) {
         const entries = Object.entries(daily);
         const totalRevenue = entries.reduce((s, [, v]) => s + v.revenue, 0);
-        const totalRoomsSoldNights = entries.reduce((s, [, v]) => s + v.roomsSold, 0);
         const numDays = entries.length;
         const roomNightsAvailable = TOTAL_ROOMS * numDays;
 
-        const adr = totalRoomsSoldNights > 0 ? totalRevenue / totalRoomsSoldNights : 0;
         const revpar = roomNightsAvailable > 0 ? totalRevenue / roomNightsAvailable : 0;
         const avgOccupancy = entries.length > 0
             ? entries.reduce((s, [, v]) => s + v.occupancy, 0) / entries.length
@@ -165,7 +151,6 @@
 
         return {
             totalRevenue,
-            adr,
             occupancy: avgOccupancy,
             revpar
         };
@@ -182,7 +167,6 @@
     function renderKPIs(daily) {
         const kpis = computeKPIs(daily);
         kpiTotalRevenue.textContent = formatMoney(kpis.totalRevenue);
-        kpiADR.textContent = formatMoney(kpis.adr);
         kpiOccupancy.textContent = formatNum(kpis.occupancy) + ' %';
         kpiRevPAR.textContent = formatMoney(kpis.revpar);
     }
@@ -202,7 +186,6 @@
                 <td>${v.roomsSold}</td>
                 <td>${formatNum(v.occupancy)} %</td>
                 <td>${formatMoney(v.revenue)}</td>
-                <td>${formatMoney(v.adr)}</td>
             </tr>
         `).join('');
     }
@@ -314,10 +297,6 @@
         });
         refreshBtn && refreshBtn.addEventListener('click', loadBookings);
         applyFiltersBtn && applyFiltersBtn.addEventListener('click', applyFilters);
-        statusFilterEl && statusFilterEl.addEventListener('change', () => {
-            clearTimeout(filterDebounceTimer);
-            filterDebounceTimer = setTimeout(applyFilters, 150);
-        });
 
         loadBookings();
     }

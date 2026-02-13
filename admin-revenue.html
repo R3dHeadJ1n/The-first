@@ -24,12 +24,6 @@
         <section class="admin-table-toolbar revenue-toolbar">
             <input type="date" id="dateFrom" aria-label="Date from">
             <input type="date" id="dateTo" aria-label="Date to">
-            <select id="statusFilter">
-                <option value="confirmed">Confirmed</option>
-                <option value="">All statuses</option>
-                <option value="unconfirmed">Unconfirmed</option>
-                <option value="deleted">Deleted</option>
-            </select>
             <button class="ghost-btn" id="applyFiltersBtn">Apply</button>
         </section>
 
@@ -37,10 +31,6 @@
             <div class="revenue-kpi-card">
                 <span class="revenue-kpi-label">Total Revenue</span>
                 <span class="revenue-kpi-value" id="kpiTotalRevenue">— THB</span>
-            </div>
-            <div class="revenue-kpi-card">
-                <span class="revenue-kpi-label">ADR (Avg Daily Rate)</span>
-                <span class="revenue-kpi-value" id="kpiADR">— THB</span>
             </div>
             <div class="revenue-kpi-card">
                 <span class="revenue-kpi-label">Occupancy</span>
@@ -69,7 +59,6 @@
                             <th>Rooms Sold</th>
                             <th>Occupancy %</th>
                             <th>Revenue (THB)</th>
-                            <th>ADR (THB)</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
