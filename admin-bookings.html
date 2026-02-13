@@ -16,6 +16,7 @@
             </div>
             <div class="header-actions">
                 <button class="ghost-btn" id="backToDashboard">← Back to dashboard</button>
+                <button class="ghost-btn" id="revenueBtn">Revenue Analytics</button>
                 <button class="primary-btn" id="addBookingBtn">+ New booking</button>
             </div>
         </header>
@@ -89,8 +90,10 @@
                     </select>
                 </label>
                 <label>
-                    Room ID (optional)
-                    <input type="text" id="bookingRoomId" placeholder="e.g. 21">
+                    Room
+                    <select id="bookingRoomSelect" disabled>
+                        <option value="">Select room type and dates first</option>
+                    </select>
                 </label>
                 <label>
                     Guests
@@ -142,12 +145,24 @@ async function initBackend() {
         const bookingModal = document.getElementById('bookingModal');
         const bookingForm = document.getElementById('bookingForm');
         const bookingIdInput = document.getElementById('bookingId');
+        const bookingRoomTypeEl = document.getElementById('bookingRoomType');
+        const bookingRoomSelectEl = document.getElementById('bookingRoomSelect');
+        const bookingCheckInEl = document.getElementById('bookingCheckIn');
+        const bookingCheckOutEl = document.getElementById('bookingCheckOut');
         const bookingModalTitle = document.getElementById('bookingModalTitle');
         const bookingSubmitBtn = document.getElementById('bookingSubmitBtn');
         const closeBookingModalBtn = document.getElementById('closeBookingModal');
         const bookingCancelBtn = document.getElementById('bookingCancelBtn');
 
+        const BIG_ROOM_IDS = ['21', '31', '41'];
+
         let bookingsCache = [];
+
+        function formatRoomName(roomId, roomType) {
+            if (!roomId) return 'Unknown';
+            const type = roomType || (BIG_ROOM_IDS.includes(String(roomId)) ? 'Big' : 'Small');
+            return `${type === 'big' ? 'Big' : 'Small'} Room ${roomId}`;
+        }
 
         start();
 
@@ -156,9 +171,30 @@ async function start() {
   init();
 }
 
+        function formatDate(date) {
+            if (!date || !(date instanceof Date)) return '';
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function setDefaultDateRange() {
+            const now = new Date();
+            const toStr = formatDate(now);
+            const from = new Date(now);
+            from.setDate(from.getDate() - 30);
+            const fromStr = formatDate(from);
+            bookingDateFrom.value = fromStr;
+            bookingDateTo.value = toStr;
+        }
+
         function init() {
             document.getElementById('backToDashboard').addEventListener('click', () => {
                 window.location.href = `${window.location.origin}/admin.html`;
+            });
+            document.getElementById('revenueBtn')?.addEventListener('click', () => {
+                window.location.href = `${window.location.origin}/admin-revenue.html`;
             });
             document.getElementById('refreshBookingsBtn').addEventListener('click', loadBookings);
             document.getElementById('addBookingBtn').addEventListener('click', () => openBookingModal());
@@ -171,8 +207,55 @@ async function start() {
             roomTypeFilter.addEventListener('change', renderBookings);
             bookingDateFrom.addEventListener('change', renderBookings);
             bookingDateTo.addEventListener('change', renderBookings);
+            bookingRoomTypeEl.addEventListener('change', loadAvailableRoomsForModal);
+            bookingCheckInEl.addEventListener('change', loadAvailableRoomsForModal);
+            bookingCheckOutEl.addEventListener('change', loadAvailableRoomsForModal);
             if (!ensureClientAuth()) return;
+            setDefaultDateRange();
             loadBookings();
+        }
+
+        async function loadAvailableRoomsForModal() {
+            const roomType = bookingRoomTypeEl?.value;
+            const checkIn = bookingCheckInEl?.value;
+            const checkOut = bookingCheckOutEl?.value;
+            const excludeBookingId = bookingIdInput?.value || '';
+
+            if (!roomType || !checkIn || !checkOut) {
+                bookingRoomSelectEl.innerHTML = '<option value="">Select room type and dates first</option>';
+                bookingRoomSelectEl.disabled = true;
+                return;
+            }
+
+            if (new Date(checkOut) <= new Date(checkIn)) {
+                bookingRoomSelectEl.innerHTML = '<option value="">Check-out must be after check-in</option>';
+                bookingRoomSelectEl.disabled = true;
+                return;
+            }
+
+            bookingRoomSelectEl.innerHTML = '<option value="">Loading rooms...</option>';
+            bookingRoomSelectEl.disabled = false;
+
+            try {
+                let url = `${BACKEND_URL}/admin/available-rooms?roomType=${roomType}&checkIn=${checkIn}&checkOut=${checkOut}`;
+                if (excludeBookingId) url += `&excludeBookingId=${encodeURIComponent(excludeBookingId)}`;
+
+                const res = await fetch(url, { credentials: 'include' });
+                if (!res.ok) throw new Error('Failed to load rooms');
+                const data = await res.json();
+
+                if (!data.availableRooms || data.availableRooms.length === 0) {
+                    bookingRoomSelectEl.innerHTML = '<option value="">No available rooms for these dates</option>';
+                } else {
+                    bookingRoomSelectEl.innerHTML = '<option value="">-- Select Room --</option>' +
+                        data.availableRooms.map(roomId =>
+                            `<option value="${roomId}">${formatRoomName(roomId, roomType)}</option>`
+                        ).join('');
+                }
+            } catch (err) {
+                console.error(err);
+                bookingRoomSelectEl.innerHTML = '<option value="">Error loading rooms</option>';
+            }
         }
 
         function ensureClientAuth() {
@@ -270,20 +353,30 @@ async function start() {
             }
         });
 
-        function openBookingModal(booking = null) {
+        async function openBookingModal(booking = null) {
             bookingIdInput.value = booking ? booking.id : '';
             document.getElementById('bookingName').value = booking?.name || '';
             document.getElementById('bookingSurname').value = booking?.surname || '';
             document.getElementById('bookingPhone').value = booking?.phone || '';
-            document.getElementById('bookingRoomType').value = booking?.roomType || 'small';
-            document.getElementById('bookingRoomId').value = booking?.roomId || '';
+            bookingRoomTypeEl.value = booking?.roomType || 'small';
             document.getElementById('bookingGuests').value = booking?.guests || 1;
-            document.getElementById('bookingCheckIn').value = booking?.checkIn || '';
-            document.getElementById('bookingCheckOut').value = booking?.checkOut || '';
+            bookingCheckInEl.value = booking?.checkIn || '';
+            bookingCheckOutEl.value = booking?.checkOut || '';
             document.getElementById('bookingStatus').value = booking?.status || 'confirmed';
+
+            bookingRoomSelectEl.innerHTML = '<option value="">Select room type and dates first</option>';
+            bookingRoomSelectEl.disabled = true;
+
             bookingModalTitle.textContent = booking ? 'Edit booking' : 'Add booking';
             bookingSubmitBtn.textContent = booking ? 'Update booking' : 'Create booking';
             bookingModal.classList.add('open');
+
+            if (booking?.checkIn && booking?.checkOut) {
+                await loadAvailableRoomsForModal();
+                if (booking?.roomId) {
+                    bookingRoomSelectEl.value = String(booking.roomId);
+                }
+            }
         }
 
         function closeBookingModal() {
@@ -292,20 +385,26 @@ async function start() {
 
         async function submitBookingForm(event) {
             event.preventDefault();
+            const roomId = bookingRoomSelectEl?.value?.trim();
             const payload = {
                 name: document.getElementById('bookingName').value.trim(),
                 surname: document.getElementById('bookingSurname').value.trim(),
                 phone: document.getElementById('bookingPhone').value.trim(),
-                roomType: document.getElementById('bookingRoomType').value,
-                roomId: document.getElementById('bookingRoomId').value.trim(),
+                roomType: bookingRoomTypeEl.value,
+                roomId: roomId || '',
                 guests: document.getElementById('bookingGuests').value,
-                checkIn: document.getElementById('bookingCheckIn').value,
-                checkOut: document.getElementById('bookingCheckOut').value,
+                checkIn: bookingCheckInEl.value,
+                checkOut: bookingCheckOutEl.value,
                 status: document.getElementById('bookingStatus').value
             };
 
             if (!payload.checkIn || !payload.checkOut) {
                 showToast('Please select both check-in and check-out dates', true);
+                return;
+            }
+
+            if (!roomId) {
+                showToast('Please select a room', true);
                 return;
             }
 
