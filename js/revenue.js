@@ -6,8 +6,14 @@
 (function () {
     'use strict';
 
-    const BACKEND_URL = 'https://the-first-production.up.railway.app';
+    let BACKEND_URL;
     const TOTAL_ROOMS = 12;
+
+    async function initBackend() {
+        const res = await fetch('/config.json');
+        const cfg = await res.json();
+        BACKEND_URL = cfg.backend;
+    }
     const CURRENCY = 'THB';
 
     // DOM refs
@@ -316,9 +322,14 @@
         loadBookings();
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
+    async function start() {
+        await initBackend();
         init();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => start());
+    } else {
+        start();
     }
 })();
