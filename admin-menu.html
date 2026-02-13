@@ -195,7 +195,13 @@
     </div>
 
     <script>
-        const BACKEND_URL = 'https://the-first-production.up.railway.app';
+        let BACKEND_URL;
+
+async function initBackend() {
+  const res = await fetch("/config.json");
+  const cfg = await res.json();
+  BACKEND_URL = cfg.backend;
+}
         let menuItems = [];
 
         // Check authentication
@@ -418,15 +424,17 @@
 
         // Initialize
         (async () => {
-            try {
-                const authenticated = await checkAuth();
-                if (authenticated) {
-                    await loadMenu();
-                }
-            } catch (error) {
-                console.error('Initialization error:', error);
-            }
-        })();
+    try {
+        await initBackend(); // ← ВОТ ЭТО КРИТИЧЕСКАЯ СТРОКА
+
+        const authenticated = await checkAuth();
+        if (authenticated) {
+            await loadMenu();
+        }
+    } catch (error) {
+        console.error('Initialization error:', error);
+    }
+})();
     </script>
 </body>
 </html>

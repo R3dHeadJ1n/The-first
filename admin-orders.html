@@ -122,7 +122,13 @@
     </template>
 
     <script>
-        const BACKEND_URL = 'https://the-first-production.up.railway.app';
+        let BACKEND_URL;
+
+async function initBackend() {
+  const res = await fetch("/config.json");
+  const cfg = await res.json();
+  BACKEND_URL = cfg.backend;
+}
         const AUTH_KEY = 'admin_authenticated';
         const AUTH_TOKEN_KEY = 'admin_auth_token';
         const ordersTableBody = document.querySelector('#ordersTable tbody');
@@ -146,7 +152,7 @@
 
         let ordersCache = [];
 
-        initOrdersPage();
+    
 
         function initOrdersPage() {
             document.getElementById('ordersBackBtn').addEventListener('click', () => {
@@ -362,6 +368,10 @@
             ordersToast.classList.add('visible');
             setTimeout(() => ordersToast.classList.remove('visible'), 3000);
         }
+        (async () => {
+    await initBackend();
+    initOrdersPage();
+})();
     </script>
 </body>
 </html>

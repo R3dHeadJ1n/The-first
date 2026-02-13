@@ -282,7 +282,13 @@ document.addEventListener('click', (e) => {
 });
 
 // Backend API Configuration
-const BACKEND_URL = "https://the-first-production.up.railway.app";
+let BACKEND_URL;
+
+async function initBackend() {
+  const res = await fetch("/config.json");
+  const cfg = await res.json();
+  BACKEND_URL = cfg.backend;
+}
 
 // Room prices per night (Bath)
 const ROOM_PRICES = { small: 700, big: 900 };
@@ -844,7 +850,10 @@ function initializeLanguage() {
 }
 
 // Initialize language on page load
-initializeLanguage();
+(async () => {
+    await initBackend();
+    initializeLanguage();
+  })();
 
 // Update guests dropdown based on room type: small (single) = 1-2, big (double) = 1-4
 function updateGuestsDropdown(roomType) {
