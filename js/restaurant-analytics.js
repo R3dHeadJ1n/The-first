@@ -11,6 +11,7 @@
 
     let chartDaily = null;
     let chartTopDishes = null;
+    let chartOrderType = null;
     let ordersCache = [];
     let menuItemsCache = [];
     let menuItemsMap = null; // dish_id -> menuItem for O(1) lookup
@@ -100,7 +101,8 @@
             aov: 0,
             dailyRevenue: {}, // { "YYYY-MM-DD": number }
             topDishes: [],    // [{ dish_id, name, category, quantity, revenue, avgPrice }]
-            topDishesByQty: [] // top 10 for bar chart
+            topDishesByQty: [], // top 10 for bar chart
+            orderTypePopularity: [] // [{ type, count, percentage }]
         };
 
         if (!orders || !Array.isArray(orders)) return result;
@@ -214,6 +216,21 @@
         result.topDishes.sort((a, b) => b.quantity - a.quantity);
         result.topDishesByQty = result.topDishes.slice(0, 10);
 
+        // Order type popularity (completed orders only)
+        const typeCounts = new Map();
+        for (const o of filteredOrders) {
+            const t = (o.type || '').trim() || 'Not set';
+            typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
+        }
+        const totalWithType = filteredOrders.length;
+        result.orderTypePopularity = Array.from(typeCounts.entries())
+            .map(([type, count]) => ({
+                type,
+                count,
+                percentage: totalWithType > 0 ? (count / totalWithType * 100) : 0
+            }))
+            .sort((a, b) => b.count - a.count);
+
         return result;
     }
 
@@ -270,6 +287,36 @@
                         grid: { color: 'rgba(0,0,0,0.05)' },
                         ticks: { callback: v => formatNum(v) + ' THB' }
                     }
+                }
+            }
+        });
+    }
+
+    function renderOrderTypeChart(orderTypePopularity) {
+        const ctx = document.getElementById('orderTypeChart');
+        if (!ctx) return;
+
+        const labels = orderTypePopularity.map(d => d.type);
+        const values = orderTypePopularity.map(d => d.count);
+        const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9E9E9E'];
+
+        if (chartOrderType) chartOrderType.destroy();
+
+        chartOrderType = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
                 }
             }
         });
@@ -360,6 +407,7 @@
         const data = getAnalyticsData(ordersCache, menuItemsCache, filters);
         renderKPIs(data);
         renderDailyChart(data.dailyRevenue, dateFrom, dateTo);
+        renderOrderTypeChart(data.orderTypePopularity);
         renderTopDishesChart(data.topDishesByQty);
         renderTable(data.topDishes);
     }

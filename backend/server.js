@@ -801,13 +801,27 @@ app.delete('/admin/bookings/:id', verifyAdminToken, async (req, res) => {
     }
 });
 
-async function updateOrderStatus(orderId, newStatus) {
+const ORDER_TYPES = ['DINE IN', 'ROOM SERVICE', 'DELIVERY'];
+
+function isValidOrderType(t) {
+    return t && ORDER_TYPES.includes(String(t).trim());
+}
+
+async function updateOrderStatus(orderId, newStatus, type = null) {
     try {
         const normalizedStatus = ensureOrderStatus(newStatus);
-        const result = await db.query(
-            `UPDATE orders SET status = $2 WHERE public_id = $1 RETURNING public_id`,
-            [orderId, normalizedStatus]
-        );
+        let result;
+        if (type !== null && isValidOrderType(type)) {
+            result = await db.query(
+                `UPDATE orders SET status = $2, type = $3 WHERE public_id = $1 RETURNING public_id`,
+                [orderId, normalizedStatus, String(type).trim()]
+            );
+        } else {
+            result = await db.query(
+                `UPDATE orders SET status = $2 WHERE public_id = $1 RETURNING public_id`,
+                [orderId, normalizedStatus]
+            );
+        }
         return result.rowCount > 0;
     } catch (error) {
         console.error('Error updating order status:', error);
@@ -837,7 +851,9 @@ function updateOrderTelegramMessageWithComplete(orderId, newText) {
 app.post('/admin/orders/:id/confirm', verifyAdminToken, async (req, res) => {
     try {
         const orderId = req.params.id;
-        const ok = await updateOrderStatus(orderId, 'live');
+        const { type } = req.body || {};
+        const orderType = (type && isValidOrderType(type)) ? String(type).trim() : 'DINE IN';
+        const ok = await updateOrderStatus(orderId, 'live', orderType);
         if (!ok) return res.status(404).json({ error: 'Order not found' });
         const order = await fetchOrderByPublicId(orderId);
         if (order) {
@@ -1362,6 +1378,7 @@ async function readOrders() {
                 o.communication,
                 o.status,
                 o.total,
+                o.type,
                 o.created_at,
                 COALESCE(
                     json_agg(
@@ -1390,6 +1407,7 @@ async function readOrders() {
                 phone: row.customer_phone || '',
                 communication: row.communication || '',
                 status: normalizeOrderStatus(row.status),
+                type: row.type || null,
                 createdAt: row.created_at ? row.created_at.toISOString() : null
             }))
         };
@@ -1409,6 +1427,7 @@ async function fetchOrderByPublicId(orderId) {
             o.communication,
             o.status,
             o.total,
+            o.type,
             o.created_at,
             COALESCE(
                 json_agg(
@@ -1439,6 +1458,7 @@ async function fetchOrderByPublicId(orderId) {
         phone: row.customer_phone || '',
         communication: row.communication || '',
         status: normalizeOrderStatus(row.status),
+        type: row.type || null,
         createdAt: row.created_at ? row.created_at.toISOString() : null
     };
 }
@@ -1458,13 +1478,20 @@ async function insertOrderWithItems(orderPayload) {
     const client = await db.pool.connect();
     try {
         await client.query('BEGIN');
-        const { id, name, phone, communication, items, total, status } = orderPayload;
+        const { id, name, phone, communication, items, total, status, type } = orderPayload;
         const normalizedStatus = normalizeOrderStatus(status, 'unconfirmed');
+        const orderType = (type && isValidOrderType(type)) ? String(type).trim() : null;
         const orderResult = await client.query(
-            `INSERT INTO orders (public_id, customer_name, customer_phone, communication, total, status)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id, public_id, created_at`,
-            [id, name || '', phone || '', communication || '', total, normalizedStatus]
+            orderType
+                ? `INSERT INTO orders (public_id, customer_name, customer_phone, communication, total, status, type)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7)
+                   RETURNING id, public_id, created_at`
+                : `INSERT INTO orders (public_id, customer_name, customer_phone, communication, total, status)
+                   VALUES ($1, $2, $3, $4, $5, $6)
+                   RETURNING id, public_id, created_at`,
+            orderType
+                ? [id, name || '', phone || '', communication || '', total, normalizedStatus, orderType]
+                : [id, name || '', phone || '', communication || '', total, normalizedStatus]
         );
         const orderDbId = orderResult.rows[0].id;
         for (const item of items) {
@@ -1518,6 +1545,13 @@ async function updateOrderRecord(orderId, updates = {}) {
         }
         if (typeof updates.status === 'string') {
             pushField('status', ensureOrderStatus(updates.status));
+        }
+        if (updates.type !== undefined) {
+            if (updates.type === null || updates.type === '') {
+                pushField('type', null);
+            } else if (isValidOrderType(updates.type)) {
+                pushField('type', String(updates.type).trim());
+            }
         }
 
         let itemsProvided = Array.isArray(updates.items);
@@ -1846,7 +1880,7 @@ async function processTelegramCallback(cb) {
     // Order callbacks
     const orderId = id;
     if (action === 'order_confirm') {
-        const ok = await updateOrderStatus(orderId, 'live');
+        const ok = await updateOrderStatus(orderId, 'live', 'ROOM SERVICE');
         const order = await fetchOrderByPublicId(orderId);
         if (ok && order) {
             const lines = formatOrderLines(order);

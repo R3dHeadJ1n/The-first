@@ -27,11 +27,13 @@ CREATE TABLE IF NOT EXISTS orders (
     communication VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW(),
     status VARCHAR(50) DEFAULT 'unconfirmed' CHECK (status IN ('unconfirmed','live','completed','deleted')),
-    total INTEGER NOT NULL CHECK (total >= 0)
+    total INTEGER NOT NULL CHECK (total >= 0),
+    type VARCHAR(20) CHECK (type IN ('DINE IN', 'ROOM SERVICE', 'DELIVERY'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_public_id ON orders(public_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_type ON orders(type);
 
 CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,

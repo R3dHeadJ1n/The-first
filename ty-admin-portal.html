@@ -440,6 +440,29 @@
             </div>
         </div>
 
+        <div id="orderTypeModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal orderTypeModalClose">&times;</span>
+                <h2>Select Order Type</h2>
+                <p style="margin-bottom: 16px; color: #555;">Choose how this order will be served:</p>
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 8px;">
+                        <input type="radio" name="orderType" value="DINE IN" checked> DINE IN
+                    </label>
+                    <label style="display: block; margin-bottom: 8px;">
+                        <input type="radio" name="orderType" value="ROOM SERVICE"> ROOM SERVICE
+                    </label>
+                    <label style="display: block; margin-bottom: 8px;">
+                        <input type="radio" name="orderType" value="DELIVERY"> DELIVERY
+                    </label>
+                </div>
+                <div class="admin-buttons" style="margin-top: 20px;">
+                    <button type="button" id="confirmOrderTypeBtn" class="btn">Confirm Order</button>
+                    <button type="button" id="cancelOrderTypeBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <div id="roomSelectionModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <span class="close-modal">&times;</span>
@@ -961,7 +984,7 @@
                             <span>Total: ${(o.total || 0).toFixed(2)} THB · Contact: ${o.communication || '—'}</span>
                         </div>
                         <div class="booking-actions">
-                            <button class="booking-confirm-btn" onclick="confirmOrder('${o.id}')">Confirm</button>
+                            <button class="booking-confirm-btn" onclick="openOrderTypeModal('${o.id}')">Confirm</button>
                             <button class="booking-delete-btn" onclick="declineOrder('${o.id}')">Delete</button>
                         </div>
                     </div>`;
@@ -971,14 +994,35 @@
             }
         }
 
-        async function confirmOrder(orderId) {
+        let pendingConfirmOrderId = null;
+
+        function openOrderTypeModal(orderId) {
+            pendingConfirmOrderId = orderId;
+            document.querySelector('#orderTypeModal input[name="orderType"][value="DINE IN"]').checked = true;
+            document.getElementById('orderTypeModal').style.display = 'block';
+        }
+
+        function closeOrderTypeModal() {
+            pendingConfirmOrderId = null;
+            document.getElementById('orderTypeModal').style.display = 'none';
+        }
+
+        async function confirmOrderWithType(orderId, type) {
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/confirm`, { method: 'POST', headers: window.getAdminAuthHeaders() });
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
+                    body: JSON.stringify({ type })
+                });
                 if (res.ok) {
                     showAdminMessage('Order confirmed', 'success');
+                    closeOrderTypeModal();
                     loadUnconfirmedOrders();
                     loadLiveOrders();
-                } else showAdminMessage('Failed to confirm', 'error');
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    showAdminMessage(data.error || 'Failed to confirm', 'error');
+                }
             } catch (e) {
                 showAdminMessage('Error', 'error');
             }
@@ -1008,11 +1052,12 @@
                 }
                 el.innerHTML = orders.map(o => {
                     const itemsStr = (o.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ');
+                    const typeLabel = o.type ? ` · ${o.type}` : '';
                     return `<div class="booking-item">
                         <div class="booking-info">
                             <strong>${o.name || '—'}</strong> · ${o.phone || '—'}<br>
                             <span class="dates">${itemsStr}</span><br>
-                            <span>Total: ${(o.total || 0).toFixed(2)} THB · Status: Order is being prepared</span>
+                            <span>Total: ${(o.total || 0).toFixed(2)} THB · Status: Order is being prepared${typeLabel}</span>
                         </div>
                         <button class="booking-confirm-btn" onclick="completeOrder('${o.id}')">Complete</button>
                     </div>`;
@@ -1233,6 +1278,26 @@
 
         // Bind admin-specific event listeners - called only from startAdminApp
         function bindAdminEventListeners() {
+            const orderTypeModal = document.getElementById('orderTypeModal');
+            const orderTypeClose = orderTypeModal?.querySelector('.orderTypeModalClose');
+            const confirmOrderTypeBtn = document.getElementById('confirmOrderTypeBtn');
+            const cancelOrderTypeBtn = document.getElementById('cancelOrderTypeBtn');
+            if (orderTypeClose) orderTypeClose.addEventListener('click', closeOrderTypeModal);
+            if (cancelOrderTypeBtn) cancelOrderTypeBtn.addEventListener('click', closeOrderTypeModal);
+            if (confirmOrderTypeBtn) {
+                confirmOrderTypeBtn.addEventListener('click', () => {
+                    if (!pendingConfirmOrderId) return;
+                    const typeEl = document.querySelector('input[name="orderType"]:checked');
+                    const type = typeEl ? typeEl.value : 'DINE IN';
+                    confirmOrderWithType(pendingConfirmOrderId, type);
+                });
+            }
+            if (orderTypeModal) {
+                orderTypeModal.addEventListener('click', (e) => {
+                    if (e.target === orderTypeModal) closeOrderTypeModal();
+                });
+            }
+
             const modal = document.getElementById('roomSelectionModal');
             const closeModal = document.querySelector('.close-modal');
             const confirmRoomBtn = document.getElementById('confirmRoomBtn');
