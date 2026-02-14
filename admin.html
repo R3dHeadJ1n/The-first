@@ -394,7 +394,7 @@
 </head>
 <body>
     <!-- Login Form (shown when not authenticated) -->
-    <div id="loginContainer" class="login-container">
+    <div id="login-section" class="login-container">
         <h2>Admin Login</h2>
         <form id="loginForm">
             <div class="form-group">
@@ -410,8 +410,8 @@
         </form>
     </div>
 
-    <!-- Admin Content (shown when authenticated) -->
-    <div id="adminContent" class="admin-content">
+    <!-- Admin Content (shown when authenticated, hidden until auth) -->
+    <div id="admin-section" class="admin-content" style="display: none;">
         <div class="admin-header">
             <h1>Admin Panel</h1>
             <div style="display: flex; gap: 10px; align-items: center;">
@@ -483,48 +483,55 @@
     <script src="js/admin-auth.js"></script>
     <script>
         const AUTH_KEY = 'admin_authenticated';
+        const TOKEN_KEY = 'admin_token';
         let BACKEND_URL;
 
-async function initBackend() {
-  const res = await fetch("/config.json");
-  const cfg = await res.json();
-  BACKEND_URL = cfg.backend;
-}
-        
+        // Auth gate - no admin logic runs before authentication
+        // Supports both admin_token (admin-auth.js) and admin_auth_token (legacy)
+        function isAuthenticated() {
+            return !!(window.isAdminAuthenticated && window.isAdminAuthenticated()) ||
+                !!localStorage.getItem(TOKEN_KEY) ||
+                !!localStorage.getItem('admin_auth_token');
+        }
+
+        function showLogin() {
+            document.body.classList.add('login-mode');
+            const loginEl = document.getElementById('login-section');
+            const adminEl = document.getElementById('admin-section');
+            if (loginEl) loginEl.style.display = 'block';
+            if (adminEl) adminEl.style.display = 'none';
+        }
+
+        function showAdmin() {
+            document.body.classList.remove('login-mode');
+            const loginEl = document.getElementById('login-section');
+            const adminEl = document.getElementById('admin-section');
+            if (loginEl) loginEl.style.display = 'none';
+            if (adminEl) adminEl.style.display = 'block';
+        }
+
+        async function initBackend() {
+            const res = await fetch("/config.json");
+            const cfg = await res.json();
+            BACKEND_URL = cfg.backend;
+        }
+
         let adminCheckInPicker = null;
         let adminCheckOutPicker = null;
         let unconfirmedBookingsCache = [];
 
-        function checkAuth() {
-            const isAuthenticated = sessionStorage.getItem(AUTH_KEY) === 'true' || window.isAdminAuthenticated && window.isAdminAuthenticated();
-            if (isAuthenticated) {
-                sessionStorage.setItem(AUTH_KEY, 'true');
-                showAdminContent();
-            } else {
-                showLoginForm();
-            }
-        }
-
-        function showLoginForm() {
-            document.body.classList.add('login-mode');
-            document.getElementById('loginContainer').style.display = 'block';
-            document.getElementById('adminContent').style.display = 'none';
-        }
-
-        function showAdminContent() {
-            document.body.classList.remove('login-mode');
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('adminContent').style.display = 'block';
-            // Initialize admin panel after showing content
-            setTimeout(() => {
-                initAdminPanel();
-                loadBookings();
-                loadUnconfirmedBookings();
-                loadUnconfirmedOrders();
-                loadLiveOrders();
-                checkServerStatus();
-                setInterval(() => { loadUnconfirmedOrders(); loadLiveOrders(); }, 10000);
-            }, 100);
+        // Start admin app ONLY after authentication - runs all admin logic
+        async function startAdminApp() {
+            if (!BACKEND_URL) await initBackend();
+            sessionStorage.setItem(AUTH_KEY, 'true');
+            initAdminPanel();
+            loadBookings();
+            loadUnconfirmedBookings();
+            loadUnconfirmedOrders();
+            loadLiveOrders();
+            checkServerStatus();
+            setInterval(() => { loadUnconfirmedOrders(); loadLiveOrders(); }, 10000);
+            bindAdminEventListeners();
         }
 
         // Initialize admin date pickers
@@ -778,7 +785,8 @@ async function initBackend() {
             
             try {
                 const response = await fetch(
-                    `${BACKEND_URL}/admin/available-rooms?roomType=${roomType}&checkIn=${checkIn}&checkOut=${checkOut}`
+                    `${BACKEND_URL}/admin/available-rooms?roomType=${roomType}&checkIn=${checkIn}&checkOut=${checkOut}`,
+                    { headers: window.getAdminAuthHeaders ? window.getAdminAuthHeaders() : {} }
                 );
                 
                 if (!response.ok) {
@@ -1223,75 +1231,49 @@ async function initBackend() {
             }
         }
 
-        // Save unavailability
-        document.addEventListener('DOMContentLoaded', function() {
-            // Modal event listeners
+        // Bind admin-specific event listeners - called only from startAdminApp
+        function bindAdminEventListeners() {
             const modal = document.getElementById('roomSelectionModal');
             const closeModal = document.querySelector('.close-modal');
             const confirmRoomBtn = document.getElementById('confirmRoomBtn');
             const cancelRoomBtn = document.getElementById('cancelRoomBtn');
-            
-            if (closeModal) {
-                closeModal.addEventListener('click', closeRoomSelectionModal);
-            }
-            
-            if (cancelRoomBtn) {
-                cancelRoomBtn.addEventListener('click', closeRoomSelectionModal);
-            }
-            
-            if (confirmRoomBtn) {
-                confirmRoomBtn.addEventListener('click', confirmBookingWithRoom);
-            }
-            
-            // Close modal when clicking outside
+
+            if (closeModal) closeModal.addEventListener('click', closeRoomSelectionModal);
+            if (cancelRoomBtn) cancelRoomBtn.addEventListener('click', closeRoomSelectionModal);
+            if (confirmRoomBtn) confirmRoomBtn.addEventListener('click', confirmBookingWithRoom);
+
             if (modal) {
-                window.addEventListener('click', function(event) {
-                    if (event.target === modal) {
-                        closeRoomSelectionModal();
-                    }
+                window.addEventListener('click', function outsideModal(event) {
+                    if (event.target === modal) closeRoomSelectionModal();
                 });
             }
-            
+
             const saveBtn = document.getElementById('adminSaveBtn');
-            
             if (saveBtn) {
                 saveBtn.addEventListener('click', async () => {
                     const roomId = document.getElementById('adminRoomSelect').value;
                     const checkIn = adminCheckInPicker?.selectedDates[0];
                     const checkOut = adminCheckOutPicker?.selectedDates[0];
-                    
-                    if (!roomId) {
-                        showAdminMessage('Please select a room', 'error');
-                        return;
-                    }
-                    
-                    if (!checkIn || !checkOut) {
-                        showAdminMessage('Please select both check-in and check-out dates', 'error');
-                        return;
-                    }
-                    
-                    if (checkOut <= checkIn) {
-                        showAdminMessage('Check-out date must be after check-in date', 'error');
-                        return;
-                    }
-                    
-                    // Format dates in local timezone to avoid UTC conversion issues
+
+                    if (!roomId) { showAdminMessage('Please select a room', 'error'); return; }
+                    if (!checkIn || !checkOut) { showAdminMessage('Please select both check-in and check-out dates', 'error'); return; }
+                    if (checkOut <= checkIn) { showAdminMessage('Check-out date must be after check-in date', 'error'); return; }
+
                     const checkInStr = formatDateForBackend(checkIn);
                     const checkOutStr = formatDateForBackend(checkOut);
-                    
+
                     try {
                         const response = await fetch(`${BACKEND_URL}/admin/book-room`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
                             body: JSON.stringify({ roomId, checkIn: checkInStr, checkOut: checkOutStr })
                         });
-                        
                         const data = await response.json();
                         if (data.success) {
                             showAdminMessage(data.message || 'Room marked as unavailable', 'success');
                             adminCheckInPicker.clear();
                             adminCheckOutPicker.clear();
-                            loadBookings(); // Refresh bookings list
+                            loadBookings();
                         } else {
                             showAdminMessage(data.error || 'Error saving booking', 'error');
                         }
@@ -1301,34 +1283,76 @@ async function initBackend() {
                     }
                 });
             }
-        });
 
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorMessage = document.getElementById('errorMessage');
-            errorMessage.textContent = '';
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/admin/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+            const menuBtn = document.getElementById('menuBtn');
+            if (menuBtn) {
+                menuBtn.addEventListener('click', () => {
+                    const menuWindow = window.open(`${window.location.origin}/admin-menu.html`, '_blank');
+                    if (!menuWindow || menuWindow.closed || typeof menuWindow.closed === 'undefined') {
+                        window.location.href = `${window.location.origin}/admin-menu.html`;
+                    }
                 });
-                const data = await res.json();
-                if (data.success && data.token) {
-                    window.setAdminToken(data.token);
-                    sessionStorage.setItem(AUTH_KEY, 'true');
-                    showAdminContent();
-                } else {
-                    errorMessage.textContent = data.error || 'Invalid username or password';
-                }
-            } catch (err) {
-                errorMessage.textContent = 'Connection error. Please try again.';
             }
+
+            const allBookingsBtn = document.getElementById('allBookingsBtn');
+            if (allBookingsBtn) allBookingsBtn.addEventListener('click', () => { window.location.href = `${window.location.origin}/admin-bookings.html`; });
+
+            const allOrdersBtn = document.getElementById('allOrdersBtn');
+            if (allOrdersBtn) allOrdersBtn.addEventListener('click', () => { window.location.href = `${window.location.origin}/admin-orders.html`; });
+
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', () => {
+                    sessionStorage.removeItem(AUTH_KEY);
+                    window.clearAdminToken && window.clearAdminToken();
+                    if (adminCheckInPicker) { adminCheckInPicker.destroy(); adminCheckInPicker = null; }
+                    if (adminCheckOutPicker) { adminCheckOutPicker.destroy(); adminCheckOutPicker = null; }
+                    showLogin();
+                    document.getElementById('loginForm').reset();
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auth gate - NO admin logic or API calls before authentication
+            if (isAuthenticated()) {
+                showAdmin();
+                startAdminApp();
+            } else {
+                showLogin();
+                console.warn('[Admin] No admin token found. Admin API calls blocked until login.');
+            }
+
+            // Login form - bind once, works before auth (fetches config on submit)
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const errorMessage = document.getElementById('errorMessage');
+                errorMessage.textContent = '';
+                try {
+                    if (!BACKEND_URL) await initBackend();
+                    const res = await fetch(`${BACKEND_URL}/api/admin/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await res.json();
+                    if (data.success && data.token) {
+                        window.setAdminToken && window.setAdminToken(data.token);
+                        sessionStorage.setItem(AUTH_KEY, 'true');
+                        showAdmin();
+                        await startAdminApp();
+                    } else {
+                        errorMessage.textContent = data.error || 'Invalid username or password';
+                    }
+                } catch (err) {
+                    errorMessage.textContent = 'Connection error. Please try again.';
+                }
+            });
         });
 
-        // Check server status and update display
+        // Check server status - only called from startAdminApp
         async function checkServerStatus() {
             const statusEl = document.getElementById('serverStatus');
             const indicatorEl = statusEl?.querySelector('.status-indicator');
@@ -1367,50 +1391,6 @@ async function initBackend() {
                 statusEl.title = 'Cannot connect to server. Make sure backend is running on port 3001.';
             }
         }
-
-        // Handle menu button - open menu management in new window
-        const menuBtn = document.getElementById('menuBtn');
-        if (menuBtn) {
-            menuBtn.addEventListener('click', () => {
-                const menuWindow = window.open(`${window.location.origin}/admin-menu.html`, '_blank');
-                if (!menuWindow || menuWindow.closed || typeof menuWindow.closed === 'undefined') {
-                    window.location.href = `${window.location.origin}/admin-menu.html`;
-                }
-            });
-        }
-
-        const allBookingsBtn = document.getElementById('allBookingsBtn');
-        if (allBookingsBtn) {
-            allBookingsBtn.addEventListener('click', () => {
-                window.location.href = `${window.location.origin}/admin-bookings.html`;
-            });
-        }
-        const allOrdersBtn = document.getElementById('allOrdersBtn');
-        if (allOrdersBtn) {
-            allOrdersBtn.addEventListener('click', () => {
-                window.location.href = `${window.location.origin}/admin-orders.html`;
-            });
-        }
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            sessionStorage.removeItem(AUTH_KEY);
-            window.clearAdminToken && window.clearAdminToken();
-            if (adminCheckInPicker) {
-                adminCheckInPicker.destroy();
-                adminCheckInPicker = null;
-            }
-            if (adminCheckOutPicker) {
-                adminCheckOutPicker.destroy();
-                adminCheckOutPicker = null;
-            }
-            showLoginForm();
-            document.getElementById('loginForm').reset();
-        });
-
-        // Check auth on page load
-        (async () => {
-    await initBackend();
-    checkAuth();
-})();
     </script>
 </body>
 </html>
