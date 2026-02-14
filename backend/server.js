@@ -2320,7 +2320,7 @@ app.post('/book-room', async (req, res) => {
 async function loadMenuItemsFromDb() {
     try {
         const result = await db.query(
-            `SELECT dish_id, category, name, price, image_path
+            `SELECT dish_id, category, name, name_ru, name_th, price, image_path
              FROM menu_items
              ORDER BY display_order, id`
         );
@@ -2328,6 +2328,8 @@ async function loadMenuItemsFromDb() {
             id: row.dish_id,
             category: row.category,
             name: row.name,
+            name_ru: row.name_ru || null,
+            name_th: row.name_th || null,
             price: row.price,
             image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null
         }));
@@ -2337,13 +2339,14 @@ async function loadMenuItemsFromDb() {
     }
 }
 
-async function updateMenuItemRecord(dishId, newName, newPrice) {
+async function updateMenuItemRecord(dishId, updates) {
     try {
+        const { name, name_ru, name_th, price } = updates;
         const result = await db.query(
             `UPDATE menu_items
-             SET name = $2, price = $3
+             SET name = $2, name_ru = $3, name_th = $4, price = $5
              WHERE dish_id = $1`,
-            [dishId, newName, newPrice]
+            [dishId, name || '', name_ru || null, name_th || null, price]
         );
         if (result.rowCount === 0) {
             return { success: false, error: 'Dish not found' };
@@ -2468,7 +2471,7 @@ app.use('/api/menu', menuApiRouter);
 app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
     try {
         const dishId = req.params.id;
-        const { name, price } = req.body;
+        const { name, name_ru, name_th, price } = req.body || {};
 
         if (!name || price === undefined || price === null) {
             return res.status(400).json({ error: 'Name and price are required' });
@@ -2479,7 +2482,7 @@ app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
             return res.status(400).json({ error: 'Invalid price' });
         }
 
-        const result = await updateMenuItemRecord(dishId, name, priceNum);
+        const result = await updateMenuItemRecord(dishId, { name, name_ru, name_th, price: priceNum });
         
         if (result.success) {
             // Clear menu cache when menu is updated

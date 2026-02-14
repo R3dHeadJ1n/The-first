@@ -491,7 +491,14 @@
         <div class="menu-page-header">
             <h1 data-i18n="menu_title">Our Menu</h1>
             <div style="display: flex; align-items: center; gap: 15px;">
-                <!-- Shopping Cart Icon -->
+                <div class="lang-switcher" aria-label="Language selector">
+                    <button type="button" class="lang-btn" id="menuLangButton">ENG</button>
+                    <div class="lang-dropdown" id="menuLangDropdown">
+                        <button type="button" class="lang-option" data-lang="en">ENG</button>
+                        <button type="button" class="lang-option" data-lang="ru">RU</button>
+                        <button type="button" class="lang-option" data-lang="th">TH</button>
+                    </div>
+                </div>
                 <div class="cart-icon-container" id="cartIconContainer" title="View Cart">
                     <svg class="cart-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12L8.1 13h7.45c.75 0 1.41-.41 1.75-1.03L21.7 4H5.21l-.94-2H1zm16 16c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -614,12 +621,46 @@ async function initBackend() {
         function t(key) {
             return (translations[currentLang] && translations[currentLang][key]) ? translations[currentLang][key] : key;
         }
+
+        function getDishDisplayName(item) {
+            if (!item) return '';
+            if (currentLang === 'ru' && item.name_ru) return item.name_ru;
+            if (currentLang === 'th' && item.name_th) return item.name_th;
+            return item.name || '';
+        }
         
         function applyTranslations() {
             document.querySelectorAll('[data-i18n]').forEach((el) => {
                 const key = el.getAttribute('data-i18n');
                 el.textContent = t(key);
             });
+        }
+
+        function setMenuLanguage(lang) {
+            currentLang = lang;
+            try { localStorage.setItem('selectedLanguage', lang); } catch (e) {}
+            applyTranslations();
+            const btn = document.getElementById('menuLangButton');
+            if (btn) btn.textContent = { en: 'ENG', ru: 'RU', th: 'TH' }[lang] || 'ENG';
+            document.querySelectorAll('#menuLangDropdown .lang-option').forEach(opt => {
+                opt.classList.toggle('active', opt.getAttribute('data-lang') === lang);
+            });
+            if (menuItems && menuItems.length > 0) renderMenu();
+        }
+
+        function setupMenuLanguageSwitcher() {
+            const btn = document.getElementById('menuLangButton');
+            const switcher = btn?.closest('.lang-switcher');
+            if (btn) btn.textContent = { en: 'ENG', ru: 'RU', th: 'TH' }[currentLang] || 'ENG';
+            btn?.addEventListener('click', (e) => { e.stopPropagation(); switcher?.classList.toggle('open'); });
+            document.querySelectorAll('#menuLangDropdown .lang-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    setMenuLanguage(opt.getAttribute('data-lang'));
+                    switcher?.classList.remove('open');
+                });
+                opt.classList.toggle('active', opt.getAttribute('data-lang') === currentLang);
+            });
+            document.addEventListener('click', () => switcher?.classList.remove('open'));
         }
         
         // Cart management
@@ -979,7 +1020,8 @@ async function initBackend() {
                     html += '<div class="menu-category-items">';
                     grouped[category].forEach(item => {
                         if (!item || !item.id || !item.name || typeof item.price !== 'number') return;
-                        const escapedName = escapeHtml(item.name);
+                        const displayName = getDishDisplayName(item);
+                        const escapedName = escapeHtml(displayName);
                         const escapedId = escapeHtml(String(item.id));
                         const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                         const cartItem = cart[escapedId];
@@ -1045,7 +1087,8 @@ async function initBackend() {
             const menuItem = menuItems.find(item => String(item.id) === dishId);
             if (!menuItem) return;
             
-            const escapedName = escapeHtml(menuItem.name);
+            const displayName = getDishDisplayName(menuItem);
+            const escapedName = escapeHtml(displayName);
             const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             
             // Remove existing button/controls
@@ -1167,6 +1210,7 @@ async function initBackend() {
                 
                 // Apply translations first
                 applyTranslations();
+                setupMenuLanguageSwitcher();
                 
                 // Load menu directly (it will handle errors with timeout)
                 await loadMenu();

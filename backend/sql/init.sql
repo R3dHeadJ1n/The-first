@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS menu_items (
     dish_id TEXT UNIQUE NOT NULL,
     category VARCHAR(100) NOT NULL,
     name VARCHAR(255) NOT NULL,
+    name_ru VARCHAR(255),
+    name_th VARCHAR(255),
     price INTEGER NOT NULL CHECK (price >= 0),
     image_path TEXT,
     display_order INTEGER DEFAULT 0

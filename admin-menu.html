@@ -260,8 +260,16 @@ async function initBackend() {
                         </div>
                         <div class="menu-item-form">
                             <div class="form-group">
-                                <label>Dish Name</label>
-                                <input type="text" class="dish-name" value="${escapeHtml(item.name)}" data-id="${item.id}">
+                                <label>Dish Name (EN)</label>
+                                <input type="text" class="dish-name" value="${escapeHtml(item.name)}" data-id="${item.id}" placeholder="English">
+                            </div>
+                            <div class="form-group">
+                                <label>Dish Name (RU)</label>
+                                <input type="text" class="dish-name-ru" value="${escapeHtml(item.name_ru || '')}" data-id="${item.id}" placeholder="Russian">
+                            </div>
+                            <div class="form-group">
+                                <label>Dish Name (TH)</label>
+                                <input type="text" class="dish-name-th" value="${escapeHtml(item.name_th || '')}" data-id="${item.id}" placeholder="Thai">
                             </div>
                             <div class="form-group">
                                 <label>Price</label>
@@ -311,13 +319,18 @@ async function initBackend() {
 
         // Save item changes
         async function saveItem(dishId) {
-            const card = document.querySelector(`[data-id="${dishId}"]`);
+            const card = document.querySelector(`.menu-item-card[data-id="${dishId}"]`);
+            if (!card) return;
             const nameInput = card.querySelector('.dish-name');
+            const nameRuInput = card.querySelector('.dish-name-ru');
+            const nameThInput = card.querySelector('.dish-name-th');
             const priceInput = card.querySelector('.dish-price');
             const imageInput = card.querySelector('.image-input');
 
-            const name = nameInput.value.trim();
-            const price = parseFloat(priceInput.value);
+            const name = nameInput?.value?.trim() || '';
+            const name_ru = nameRuInput?.value?.trim() || null;
+            const name_th = nameThInput?.value?.trim() || null;
+            const price = parseFloat(priceInput?.value);
 
             if (!name) {
                 showMessage('Dish name is required', 'error');
@@ -330,14 +343,13 @@ async function initBackend() {
             }
 
             try {
-                // Update name and price
                 const updateResponse = await fetch(`${BACKEND_URL}/api/menu/${dishId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                         ...window.getAdminAuthHeaders()
                     },
-                    body: JSON.stringify({ name, price })
+                    body: JSON.stringify({ name, name_ru: name_ru || undefined, name_th: name_th || undefined, price })
                 });
 
                 if (!updateResponse.ok) {
