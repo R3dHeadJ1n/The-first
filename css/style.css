@@ -242,12 +242,14 @@ body {
     width: 100%;
     height: 280px;
     min-height: 280px;
+    max-height: 280px;
     flex-shrink: 0;
     border-radius: 12px 12px 0 0;
     overflow: hidden;
     background-color: rgba(255, 255, 255, 0.12);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-sizing: border-box;
 }
 
 .feature-card-image:hover {
@@ -435,12 +437,14 @@ body {
         flex: 1;
         gap: clamp(1rem, 4vw, 1.5rem);
         margin-top: 0;
+        width: 100%;
     }
     
     .feature-card {
         margin-top: 30px;
         max-width: 100%;
         width: 100%;
+        min-width: 0;
     }
     
     .feature-card-image,
@@ -456,7 +460,13 @@ body {
         padding: 18px 20px;
         font-size: 18px;
         letter-spacing: 0.1em;
+        height: 52px;
         min-height: 52px;
+        max-height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
     }
     
     .lang-switcher {
@@ -511,7 +521,13 @@ body {
     .feature-card .btn {
         padding: 16px 20px;
         font-size: 16px;
+        height: 48px;
         min-height: 48px;
+        max-height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
     }
     
     .lang-switcher {
@@ -1393,9 +1409,10 @@ body:has(.modal.show) .lang-switcher {
     padding: 20px;
 }
 
-/* Smooth scrolling */
+/* Smooth scrolling and stable layout when switching language (scrollbar doesn't shift width) */
 html {
     scroll-behavior: smooth;
+    scrollbar-gutter: stable;
 }
 
 
