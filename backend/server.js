@@ -7,18 +7,26 @@ const https = require('https');
 const path = require('path');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const multer = require('multer');
 const db = require('./db');
 
-// Admin auth (from env, fallback for dev only)
-const ADMIN_LOGIN = process.env.ADMIN_LOGIN || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+// Admin auth - must be set via environment variables (no default credentials)
+if (!process.env.ADMIN_LOGIN || !process.env.ADMIN_PASSWORD) {
+    console.error('ADMIN_LOGIN and ADMIN_PASSWORD must be set in environment variables');
+    process.exit(1);
+}
+const ADMIN_LOGIN = process.env.ADMIN_LOGIN;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const ADMIN_TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || 'change-me-in-production';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Trust proxy for Railway/Vercel - required for correct client IP in rate limiting
+app.set('trust proxy', 1);
 
 // Track server start time
 const serverStartTime = new Date();
@@ -67,6 +75,35 @@ function requireAuth(req, res, next) {
     }
     return res.status(401).json({ error: 'Unauthorized' });
 }
+
+// Rate limiters - protect admin auth from brute-force attacks
+// JSON error response when limit exceeded (production-safe)
+const rateLimitHandler = (req, res, next, options) => {
+    res.status(429).json({
+        success: false,
+        error: options.message || 'Too many requests, please try again later.'
+    });
+};
+
+// Strict limiter for login endpoints - 5 attempts per 15 minutes per IP
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: 'Too many login attempts. Please try again in 15 minutes.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: rateLimitHandler
+});
+
+// Moderate limiter for all /admin/* API routes - 100 requests per 15 minutes
+const adminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many admin requests. Please slow down.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: rateLimitHandler
+});
 
 const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
 const TELEGRAM_MESSAGES_FILE = path.join(__dirname, 'telegram-messages.json');
@@ -436,6 +473,9 @@ async function markBookingAsDeleted(bookingId) {
 }
 
 // Admin routes - define BEFORE static middleware to take precedence
+// Apply moderate rate limit to all /admin/* endpoints
+app.use('/admin', adminLimiter);
+
 // Admin page route - serve admin.html
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'admin.html'));
@@ -499,7 +539,8 @@ app.get('/admin/status', (req, res) => {
 });
 
 // POST /api/admin/login - Token-based admin login (returns JWT)
-app.post('/api/admin/login', (req, res) => {
+// Protected by strict rate limit to prevent brute-force
+app.post('/api/admin/login', loginLimiter, (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
@@ -521,7 +562,8 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 // Legacy admin login (session) - kept for compatibility, redirects to token flow
-app.post('/admin/login', (req, res) => {
+// Protected by strict rate limit to prevent brute-force
+app.post('/admin/login', loginLimiter, (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
