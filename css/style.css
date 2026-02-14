@@ -2084,9 +2084,9 @@ html {
 }
 
 .item-row .item-qty {
-    width: 4ch;
-    max-width: 5ch;
-    min-width: 3ch;
+    width: 10ch;
+    max-width: 12ch;
+    min-width: 6ch;
 }
 
 .items-header {
