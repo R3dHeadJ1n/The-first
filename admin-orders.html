@@ -170,7 +170,7 @@ async function initBackend() {
 
         async function initOrdersPage() {
             document.getElementById('ordersBackBtn').addEventListener('click', () => {
-                window.location.href = `${window.location.origin}/admin.html`;
+                window.location.href = `${window.location.origin}/ty-admin-portal.html`;
             });
             document.getElementById('refreshOrdersBtn').addEventListener('click', loadOrders);
             document.getElementById('analyticsBtn')?.addEventListener('click', () => {
@@ -202,7 +202,7 @@ async function initBackend() {
             const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
             const tokenExists = window.isAdminAuthenticated && window.isAdminAuthenticated();
             if (!sessionAuthed && !tokenExists) {
-                window.location.href = `${window.location.origin}/admin.html`;
+                window.location.href = `${window.location.origin}/ty-admin-portal.html`;
                 return false;
             }
             return true;

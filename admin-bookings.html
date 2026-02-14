@@ -191,7 +191,7 @@ async function start() {
 
         function init() {
             document.getElementById('backToDashboard').addEventListener('click', () => {
-                window.location.href = `${window.location.origin}/admin.html`;
+                window.location.href = `${window.location.origin}/ty-admin-portal.html`;
             });
             document.getElementById('revenueBtn')?.addEventListener('click', () => {
                 window.location.href = `${window.location.origin}/admin-revenue.html`;
@@ -262,7 +262,7 @@ async function start() {
             const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
             const tokenExists = window.isAdminAuthenticated && window.isAdminAuthenticated();
             if (!sessionAuthed && !tokenExists) {
-                window.location.href = `${window.location.origin}/admin.html`;
+                window.location.href = `${window.location.origin}/ty-admin-portal.html`;
                 return false;
             }
             return true;

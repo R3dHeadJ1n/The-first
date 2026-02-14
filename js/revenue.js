@@ -284,7 +284,7 @@
     function ensureAuth() {
         const authed = sessionStorage.getItem('admin_authenticated') === 'true' || (window.isAdminAuthenticated && window.isAdminAuthenticated());
         if (!authed) {
-            window.location.href = `${window.location.origin}/admin.html`;
+            window.location.href = `${window.location.origin}/ty-admin-portal.html`;
             return false;
         }
         return true;

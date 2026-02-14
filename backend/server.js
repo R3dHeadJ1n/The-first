@@ -476,14 +476,9 @@ async function markBookingAsDeleted(bookingId) {
 // Apply moderate rate limit to all /admin/* endpoints
 app.use('/admin', adminLimiter);
 
-// Admin page route - serve admin.html
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'admin.html'));
-});
-
-// Also support /admin.html for convenience
-app.get('/admin.html', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'admin.html'));
+// Admin portal - private path (obscured from public)
+app.get('/ty-admin-portal.html', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'ty-admin-portal.html'));
 });
 
 // Admin menu management page
