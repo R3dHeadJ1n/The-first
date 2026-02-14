@@ -959,17 +959,18 @@ async function initBackend() {
                 }
                 
                 const cart = getCart();
-                const categoryOrder = ['Breakfast', 'Appetizers', 'Pizza', 'Lunch', 'Curry', 'Kids', 'Drinks'];
                 const grouped = {};
+                const categoryOrder = [];
                 menuItems.forEach(item => {
                     const cat = item.category || 'Other';
-                    if (!grouped[cat]) grouped[cat] = [];
+                    if (!grouped[cat]) {
+                        grouped[cat] = [];
+                        categoryOrder.push(cat);
+                    }
                     grouped[cat].push(item);
                 });
-                const orderedCats = categoryOrder.filter(c => grouped[c]).concat(
-                    Object.keys(grouped).filter(c => !categoryOrder.includes(c))
-                );
-                const categoryEmoji = { Breakfast: '🍳', Appetizers: '🥗', Pizza: '🍕', Lunch: '🍱', Curry: '🍛', Kids: '👶', Drinks: '🥤', Other: '📋' };
+                const orderedCats = categoryOrder;
+                const categoryEmoji = { Breakfast: '🍳', Appetizers: '🥗', Pizza: '🍕', Lunch: '🍱', Curry: '🍛', Kids: '👶', Drinks: '🥤', 'Soups': '🍲', 'Mains': '🍽️', 'Rice & Noodles': '🍜', Other: '📋' };
                 
                 let html = '';
                 orderedCats.forEach(category => {
