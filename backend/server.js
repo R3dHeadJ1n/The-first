@@ -167,97 +167,6 @@ function mapBookingRow(row) {
     };
 }
 
-const DEFAULT_MENU_ITEMS = [
-    { dishId: 'dish-1', category: 'Breakfast', name: 'Scrambled Eggs', price: 80 },
-    { dishId: 'dish-2', category: 'Breakfast', name: 'Pancakes with Honey', price: 95 },
-    { dishId: 'dish-3', category: 'Breakfast', name: 'Thai Omelette', price: 85 },
-    { dishId: 'dish-4', category: 'Breakfast', name: 'French Toast', price: 90 },
-    { dishId: 'dish-5', category: 'Breakfast', name: 'Muesli with Yogurt', price: 75 },
-    { dishId: 'dish-6', category: 'Breakfast', name: 'Bacon and Eggs', price: 120 },
-    { dishId: 'dish-7', category: 'Breakfast', name: 'Breakfast Set', price: 150 },
-    { dishId: 'dish-8', category: 'Appetizers', name: 'Spring Rolls', price: 65 },
-    { dishId: 'dish-9', category: 'Appetizers', name: 'Chicken Satay', price: 85 },
-    { dishId: 'dish-10', category: 'Appetizers', name: 'Tom Yum Soup', price: 90 },
-    { dishId: 'dish-11', category: 'Appetizers', name: 'Papaya Salad', price: 70 },
-    { dishId: 'dish-12', category: 'Appetizers', name: 'Fish Cakes', price: 75 },
-    { dishId: 'dish-13', category: 'Appetizers', name: 'Fried Calamari', price: 95 },
-    { dishId: 'dish-14', category: 'Appetizers', name: 'Chicken Wings', price: 80 },
-    { dishId: 'dish-15', category: 'Pizza', name: 'Margherita', price: 180 },
-    { dishId: 'dish-16', category: 'Pizza', name: 'Pepperoni', price: 200 },
-    { dishId: 'dish-17', category: 'Pizza', name: 'Hawaiian', price: 190 },
-    { dishId: 'dish-18', category: 'Pizza', name: 'Seafood Pizza', price: 250 },
-    { dishId: 'dish-19', category: 'Pizza', name: 'Vegetarian', price: 170 },
-    { dishId: 'dish-20', category: 'Pizza', name: 'Thai Basil Pizza', price: 195 },
-    { dishId: 'dish-21', category: 'Pizza', name: 'Four Cheese', price: 210 },
-    { dishId: 'dish-22', category: 'Lunch', name: 'Pad Thai', price: 120 },
-    { dishId: 'dish-23', category: 'Lunch', name: 'Fried Rice', price: 100 },
-    { dishId: 'dish-24', category: 'Lunch', name: 'Khao Pad Sapparot', price: 130 },
-    { dishId: 'dish-25', category: 'Lunch', name: 'Pad Krapow Moo', price: 95 },
-    { dishId: 'dish-26', category: 'Lunch', name: 'Khao Soi', price: 130 },
-    { dishId: 'dish-27', category: 'Lunch', name: 'Noodle Soup', price: 90 },
-    { dishId: 'dish-28', category: 'Lunch', name: 'Grilled Chicken', price: 140 },
-    { dishId: 'dish-29', category: 'Lunch', name: 'Beef Steak', price: 180 },
-    { dishId: 'dish-30', category: 'Curry', name: 'Green Curry', price: 120 },
-    { dishId: 'dish-31', category: 'Curry', name: 'Red Curry', price: 120 },
-    { dishId: 'dish-32', category: 'Curry', name: 'Panang Curry', price: 130 },
-    { dishId: 'dish-33', category: 'Curry', name: 'Massaman Curry', price: 130 },
-    { dishId: 'dish-34', category: 'Curry', name: 'Yellow Curry', price: 115 },
-    { dishId: 'dish-35', category: 'Kids', name: 'Chicken Nuggets', price: 85 },
-    { dishId: 'dish-36', category: 'Kids', name: 'French Fries', price: 55 },
-    { dishId: 'dish-37', category: 'Kids', name: 'Spaghetti', price: 90 },
-    { dishId: 'dish-38', category: 'Kids', name: 'Fish & Chips', price: 95 },
-    { dishId: 'dish-39', category: 'Kids', name: 'Mini Burger', price: 80 },
-    { dishId: 'dish-40', category: 'Kids', name: 'Plain Fried Rice', price: 70 },
-    { dishId: 'dish-41', category: 'Drinks', name: 'Thai Iced Tea', price: 45 },
-    { dishId: 'dish-42', category: 'Drinks', name: 'Fresh Orange Juice', price: 60 },
-    { dishId: 'dish-43', category: 'Drinks', name: 'Watermelon Shake', price: 65 },
-    { dishId: 'dish-44', category: 'Drinks', name: 'Smoothie', price: 80 },
-    { dishId: 'dish-45', category: 'Drinks', name: 'Coconut Water', price: 50 },
-    { dishId: 'dish-46', category: 'Drinks', name: 'Soda', price: 35 },
-    { dishId: 'dish-47', category: 'Drinks', name: 'Coffee', price: 55 },
-    { dishId: 'dish-48', category: 'Drinks', name: 'Iced Coffee', price: 60 },
-    { dishId: 'dish-49', category: 'Drinks', name: 'Lemonade', price: 45 },
-    { dishId: 'dish-50', category: 'Drinks', name: 'Milkshake', price: 75 }
-];
-
-async function ensureMenuSeeded() {
-    const result = await db.query('SELECT COUNT(*)::int AS count FROM menu_items');
-    if (result.rows[0].count > 0) return;
-    const insertValues = DEFAULT_MENU_ITEMS.map((item, index) => [
-        item.dishId,
-        item.category,
-        item.name,
-        item.price,
-        index
-    ]);
-    for (const [dishId, category, name, price, order] of insertValues) {
-        await db.query(
-            `INSERT INTO menu_items (dish_id, category, name, price, display_order)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (dish_id) DO NOTHING`,
-            [dishId, category, name, price, order]
-        );
-    }
-}
-
-async function syncMenuImagesFromDisk() {
-    if (!fs.existsSync(MENU_IMAGES_DIR)) {
-        return;
-    }
-    const files = fs.readdirSync(MENU_IMAGES_DIR);
-    for (const filename of files) {
-        const match = filename.match(/^(dish-\d+)/);
-        if (!match) continue;
-        const dishId = match[1];
-        await db.query(
-            `UPDATE menu_items
-             SET image_path = $2
-             WHERE dish_id = $1 AND (image_path IS NULL OR image_path = '')`,
-            [dishId, filename]
-        );
-    }
-}
-
 // Read all bookings from database (excluding deleted ones)
 async function readBookingsFromDb(includeDeleted = false) {
     try {
@@ -1606,10 +1515,6 @@ async function updateOrderRecord(orderId, updates = {}) {
     }
 }
 
-ensureMenuSeeded()
-    .then(syncMenuImagesFromDisk)
-    .catch(err => console.error('Failed to seed menu items:', err));
-
 // Orders helpers
 
 
@@ -2311,7 +2216,6 @@ app.post('/book-room', async (req, res) => {
 // Load menu items from database
 async function loadMenuItemsFromDb() {
     try {
-        await ensureMenuSeeded();
         const result = await db.query(
             `SELECT dish_id, category, name, price, image_path
              FROM menu_items
