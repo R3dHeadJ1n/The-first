@@ -129,7 +129,6 @@
                 <option value="">— Select dish —</option>
             </select>
             <input type="number" class="item-qty" placeholder="Qty" min="1" step="1" required>
-            <input type="number" class="item-price" placeholder="Price" min="0" step="1" required>
             <button type="button" class="ghost-btn remove-item">×</button>
         </div>
     </template>
@@ -333,27 +332,25 @@ async function initBackend() {
         function addItemRow(item = { dish_id: '', quantity: 1, price: 0 }) {
             const template = document.getElementById('itemRowTemplate');
             const fragment = template.content.cloneNode(true);
+            const row = fragment.querySelector('.item-row');
+            if (item.price != null && item.price > 0) {
+                row.dataset.price = item.price;
+            }
             const dishSelect = fragment.querySelector('.item-dish');
             menuItemsCache.forEach(mi => {
                 const opt = document.createElement('option');
-                opt.value = mi.id;
+                opt.value = mi.id || mi.dish_id;
                 opt.textContent = `${mi.name} (${(mi.price || 0).toFixed(0)} THB)`;
-                if (String(mi.id) === String(item.dish_id || item.dishId)) {
+                if (String(mi.id || mi.dish_id) === String(item.dish_id || item.dishId)) {
                     opt.selected = true;
                 }
                 dishSelect.appendChild(opt);
             });
             dishSelect.addEventListener('change', function() {
-                const selected = menuItemsCache.find(m => String(m.id) === this.value);
-                const row = this.closest('.item-row');
-                if (selected && row) {
-                    const priceInput = row.querySelector('.item-price');
-                    if (priceInput && (!priceInput.value || priceInput.value === '0')) priceInput.value = selected.price || 0;
-                }
+                delete row.dataset.price;
                 updateItemsTotal();
             });
             fragment.querySelector('.item-qty').value = item.quantity || 1;
-            fragment.querySelector('.item-price').value = item.price || 0;
             itemsContainer.appendChild(fragment);
             updateItemsTotal();
         }
@@ -362,7 +359,9 @@ async function initBackend() {
             return Array.from(itemsContainer.querySelectorAll('.item-row')).map(row => {
                 const dishId = row.querySelector('.item-dish')?.value?.trim();
                 const quantity = Number(row.querySelector('.item-qty')?.value);
-                const price = Number(row.querySelector('.item-price')?.value);
+                const storedPrice = row.dataset.price ? Number(row.dataset.price) : null;
+                const menuItem = menuItemsCache.find(m => String(m.id || m.dish_id) === String(dishId));
+                const price = storedPrice ?? (menuItem ? Number(menuItem.price || 0) : 0);
                 return { dish_id: dishId, quantity, price };
             }).filter(item => item.dish_id && item.quantity > 0 && item.price >= 0);
         }

@@ -2078,9 +2078,15 @@ html {
 
 .item-row {
     display: grid;
-    grid-template-columns: 2fr 0.6fr 0.6fr auto;
+    grid-template-columns: 2fr 0.6fr auto;
     gap: 8px;
     align-items: center;
+}
+
+.item-row .item-qty {
+    width: 4ch;
+    max-width: 5ch;
+    min-width: 3ch;
 }
 
 .items-header {
