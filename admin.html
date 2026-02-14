@@ -480,12 +480,8 @@
 
     <!-- Flatpickr JS -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+    <script src="js/admin-auth.js"></script>
     <script>
-        // Admin credentials
-        const ADMIN_USERNAME = 'admin';
-        const ADMIN_PASSWORD = 'admin';
-        
-        // Storage key for authentication
         const AUTH_KEY = 'admin_authenticated';
         let BACKEND_URL;
 
@@ -499,11 +495,10 @@ async function initBackend() {
         let adminCheckOutPicker = null;
         let unconfirmedBookingsCache = [];
 
-        // Check authentication status on page load
         function checkAuth() {
-            const isAuthenticated = sessionStorage.getItem(AUTH_KEY) === 'true';
-            
+            const isAuthenticated = sessionStorage.getItem(AUTH_KEY) === 'true' || window.isAdminAuthenticated && window.isAdminAuthenticated();
             if (isAuthenticated) {
+                sessionStorage.setItem(AUTH_KEY, 'true');
                 showAdminContent();
             } else {
                 showLoginForm();
@@ -617,7 +612,7 @@ async function initBackend() {
 
             try {
                 console.log('Loading bookings from:', `${BACKEND_URL}/admin/bookings`);
-                const response = await fetch(`${BACKEND_URL}/admin/bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/bookings`, { headers: window.getAdminAuthHeaders() });
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -688,7 +683,7 @@ async function initBackend() {
 
             try {
                 console.log('Loading unconfirmed bookings from:', `${BACKEND_URL}/admin/unconfirmed-bookings`);
-                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`, { headers: window.getAdminAuthHeaders() });
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -835,7 +830,7 @@ async function initBackend() {
             try {
                 const response = await fetch(`${BACKEND_URL}/admin/confirm-booking/${currentConfirmingBookingId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
                     body: JSON.stringify({ roomId: selectedRoomId })
                 });
                 
@@ -869,7 +864,7 @@ async function initBackend() {
         // Confirm all unconfirmed bookings (auto-assign first available room)
         async function confirmAllUnconfirmedBookings() {
             try {
-                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`, { headers: window.getAdminAuthHeaders() });
                 if (!response.ok) throw new Error('Failed to load bookings');
                 const bookings = await response.json();
                 if (bookings.length === 0) {
@@ -894,7 +889,7 @@ async function initBackend() {
                         }
                         const confirmResp = await fetch(`${BACKEND_URL}/admin/confirm-booking/${booking.id}`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
                             body: JSON.stringify({ roomId })
                         });
                         if (confirmResp.ok) confirmed++;
@@ -915,7 +910,7 @@ async function initBackend() {
         // Delete all unconfirmed bookings
         async function deleteAllUnconfirmedBookings() {
             try {
-                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/unconfirmed-bookings`, { headers: window.getAdminAuthHeaders() });
                 if (!response.ok) throw new Error('Failed to load bookings');
                 const bookings = await response.json();
                 if (bookings.length === 0) {
@@ -926,7 +921,7 @@ async function initBackend() {
 
                 let declined = 0;
                 for (const booking of bookings) {
-                    const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE' });
+                    const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE', headers: window.getAdminAuthHeaders() });
                     if (delResp.ok) declined++;
                 }
                 showAdminMessage(`Declined ${declined} booking(s)`, 'success');
@@ -943,7 +938,7 @@ async function initBackend() {
             const el = document.getElementById('unconfirmedOrdersList');
             if (!el) return;
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/unconfirmed`);
+                const res = await fetch(`${BACKEND_URL}/admin/orders/unconfirmed`, { headers: window.getAdminAuthHeaders() });
                 const orders = await res.json();
                 if (orders.length === 0) {
                     el.innerHTML = '<div class="no-bookings">No unconfirmed orders</div>';
@@ -970,7 +965,7 @@ async function initBackend() {
 
         async function confirmOrder(orderId) {
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/confirm`, { method: 'POST' });
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/confirm`, { method: 'POST', headers: window.getAdminAuthHeaders() });
                 if (res.ok) {
                     showAdminMessage('Order confirmed', 'success');
                     loadUnconfirmedOrders();
@@ -983,7 +978,7 @@ async function initBackend() {
 
         async function declineOrder(orderId) {
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/decline`, { method: 'POST' });
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/decline`, { method: 'POST', headers: window.getAdminAuthHeaders() });
                 if (res.ok) {
                     showAdminMessage('Order deleted', 'success');
                     loadUnconfirmedOrders();
@@ -997,7 +992,7 @@ async function initBackend() {
             const el = document.getElementById('liveOrdersList');
             if (!el) return;
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/live`);
+                const res = await fetch(`${BACKEND_URL}/admin/orders/live`, { headers: window.getAdminAuthHeaders() });
                 const orders = await res.json();
                 if (orders.length === 0) {
                     el.innerHTML = '<div class="no-bookings">No live orders</div>';
@@ -1021,7 +1016,7 @@ async function initBackend() {
 
         async function completeOrder(orderId) {
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/complete`, { method: 'POST' });
+                const res = await fetch(`${BACKEND_URL}/admin/orders/${orderId}/complete`, { method: 'POST', headers: window.getAdminAuthHeaders() });
                 if (res.ok) {
                     showAdminMessage('Order completed', 'success');
                     loadLiveOrders();
@@ -1035,7 +1030,7 @@ async function initBackend() {
             document.getElementById('allBookingsModal').style.display = 'block';
             const el = document.getElementById('allBookingsList');
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/bookings/all`);
+                const res = await fetch(`${BACKEND_URL}/admin/bookings/all`, { headers: window.getAdminAuthHeaders() });
                 const bookings = await res.json();
                 if (bookings.length === 0) {
                     el.innerHTML = '<div class="no-bookings">No bookings</div>';
@@ -1060,7 +1055,7 @@ async function initBackend() {
             document.getElementById('allOrdersModal').style.display = 'block';
             const el = document.getElementById('allOrdersList');
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`);
+                const res = await fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { headers: window.getAdminAuthHeaders() });
                 const orders = await res.json();
                 if (orders.length === 0) {
                     el.innerHTML = '<div class="no-bookings">No order history</div>';
@@ -1091,7 +1086,7 @@ async function initBackend() {
         async function clearOrdersHistory() {
             if (!confirm('Clear order history? (Completed and deleted orders will be removed)')) return;
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/clear-history`, { method: 'POST' });
+                const res = await fetch(`${BACKEND_URL}/admin/clear-history`, { method: 'POST', headers: window.getAdminAuthHeaders() });
                 if (res.ok) {
                     showAdminMessage('Order history cleared', 'success');
                     loadUnconfirmedOrders();
@@ -1107,12 +1102,12 @@ async function initBackend() {
         async function clearBookingsHistory() {
             if (!confirm('Clear bookings history? This will remove all deleted bookings from the list.')) return;
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/clear-bookings-history`, { method: 'POST' });
+                const res = await fetch(`${BACKEND_URL}/admin/clear-bookings-history`, { method: 'POST', headers: window.getAdminAuthHeaders() });
                 if (res.ok) {
                     showAdminMessage('Bookings history cleared', 'success');
                     loadBookings();
                     const el = document.getElementById('allBookingsList');
-                    const res2 = await fetch(`${BACKEND_URL}/admin/bookings/all`);
+                    const res2 = await fetch(`${BACKEND_URL}/admin/bookings/all`, { headers: window.getAdminAuthHeaders() });
                     const bookings = await res2.json();
                     if (bookings.length === 0) {
                         el.innerHTML = '<div class="no-bookings">No bookings</div>';
@@ -1140,7 +1135,8 @@ async function initBackend() {
 
             try {
                 const response = await fetch(`${BACKEND_URL}/admin/booking/${bookingId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: window.getAdminAuthHeaders()
                 });
                 
                 if (response.ok) {
@@ -1160,7 +1156,7 @@ async function initBackend() {
         // Delete all admin bookings
         async function deleteAllAdminBookings() {
             try {
-                const response = await fetch(`${BACKEND_URL}/admin/bookings`);
+                const response = await fetch(`${BACKEND_URL}/admin/bookings`, { headers: window.getAdminAuthHeaders() });
                 if (!response.ok) throw new Error('Failed to load bookings');
                 const bookings = await response.json();
                 if (bookings.length === 0) {
@@ -1171,7 +1167,7 @@ async function initBackend() {
 
                 let deleted = 0;
                 for (const booking of bookings) {
-                    const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE' });
+                    const delResp = await fetch(`${BACKEND_URL}/admin/booking/${booking.id}`, { method: 'DELETE', headers: window.getAdminAuthHeaders() });
                     if (delResp.ok) deleted++;
                 }
                 showAdminMessage(`Deleted ${deleted} booking(s)`, 'success');
@@ -1191,7 +1187,8 @@ async function initBackend() {
 
             try {
                 const response = await fetch(`${BACKEND_URL}/admin/booking/${bookingId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: window.getAdminAuthHeaders()
                 });
                 
                 if (response.ok) {
@@ -1285,7 +1282,7 @@ async function initBackend() {
                     try {
                         const response = await fetch(`${BACKEND_URL}/admin/book-room`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
                             body: JSON.stringify({ roomId, checkIn: checkInStr, checkOut: checkOutStr })
                         });
                         
@@ -1306,25 +1303,28 @@ async function initBackend() {
             }
         });
 
-        // Handle login form submission
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMessage = document.getElementById('errorMessage');
-            
             errorMessage.textContent = '';
-            
-            // Check credentials
-            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-                // Store authentication in sessionStorage
-                sessionStorage.setItem(AUTH_KEY, 'true');
-                // Also store in localStorage for cross-window sharing (temporary token)
-                localStorage.setItem('admin_auth_token', Date.now().toString());
-                showAdminContent();
-            } else {
-                errorMessage.textContent = 'Invalid username or password';
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.success && data.token) {
+                    window.setAdminToken(data.token);
+                    sessionStorage.setItem(AUTH_KEY, 'true');
+                    showAdminContent();
+                } else {
+                    errorMessage.textContent = data.error || 'Invalid username or password';
+                }
+            } catch (err) {
+                errorMessage.textContent = 'Connection error. Please try again.';
             }
         });
 
@@ -1391,11 +1391,9 @@ async function initBackend() {
                 window.location.href = `${window.location.origin}/admin-orders.html`;
             });
         }
-        // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            // Clear authentication
             sessionStorage.removeItem(AUTH_KEY);
-            localStorage.removeItem('admin_auth_token'); // Clear cross-window token
+            window.clearAdminToken && window.clearAdminToken();
             if (adminCheckInPicker) {
                 adminCheckInPicker.destroy();
                 adminCheckInPicker = null;

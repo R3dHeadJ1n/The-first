@@ -389,9 +389,10 @@
 
     async function loadData() {
         try {
+            const headers = window.getAdminAuthHeaders ? window.getAdminAuthHeaders() : {};
             const [ordersRes, menuRes] = await Promise.all([
-                fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { credentials: 'include' }),
-                fetch(`${BACKEND_URL}/api/menu`, { credentials: 'include' })
+                fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { headers }),
+                fetch(`${BACKEND_URL}/api/menu`, { headers })
             ]);
             if (!ordersRes.ok) throw new Error('Failed to load orders');
             if (!menuRes.ok) throw new Error('Failed to load menu');
@@ -419,7 +420,7 @@
     }
 
     function ensureAuth() {
-        const authed = sessionStorage.getItem('admin_authenticated') === 'true' || !!localStorage.getItem('admin_auth_token');
+        const authed = sessionStorage.getItem('admin_authenticated') === 'true' || (window.isAdminAuthenticated && window.isAdminAuthenticated());
         if (!authed) {
             window.location.href = `${window.location.origin}/admin.html`;
             return false;

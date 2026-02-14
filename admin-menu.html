@@ -194,6 +194,7 @@
         <div class="loading">Loading menu...</div>
     </div>
 
+    <script src="js/admin-auth.js"></script>
     <script>
         let BACKEND_URL;
 
@@ -206,49 +207,12 @@ async function initBackend() {
 
         // Check authentication
         async function checkAuth() {
-            try {
-                // First check localStorage token (for cross-window auth)
-                const authToken = localStorage.getItem('admin_auth_token');
-                if (!authToken) {
-                    alert('Please login to admin panel first');
-                    window.location.href = `${BACKEND_URL}/admin.html`;
-                    return false;
-                }
-                
-                // Then verify with backend
-                const response = await fetch(`${BACKEND_URL}/admin/check-auth`, {
-                    method: 'GET',
-                    credentials: 'include', // Important: include cookies
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    console.error('Auth check response not OK:', response.status);
-                    // If backend check fails but we have token, still allow (token is temporary)
-                    // This handles cases where session cookie isn't shared but localStorage is
-                    return true;
-                }
-                
-                const data = await response.json();
-                if (!data.authenticated && !authToken) {
-                    alert('Please login to admin panel first');
-                    window.location.href = `${BACKEND_URL}/admin.html`;
-                    return false;
-                }
-                return true;
-            } catch (error) {
-                console.error('Auth check failed:', error);
-                // If we have localStorage token, allow access even if backend check fails
-                const authToken = localStorage.getItem('admin_auth_token');
-                if (authToken) {
-                    console.log('Using localStorage auth token as fallback');
-                    return true;
-                }
-                alert('Cannot connect to server. Make sure backend is running.');
+            if (!window.isAdminAuthenticated || !window.isAdminAuthenticated()) {
+                alert('Please login to admin panel first');
+                window.location.href = `${window.location.origin}/admin.html`;
                 return false;
             }
+            return true;
         }
 
         // Show message
@@ -327,13 +291,9 @@ async function initBackend() {
                 return;
             }
             try {
-                const authToken = localStorage.getItem('admin_auth_token');
                 const response = await fetch(`${BACKEND_URL}/api/menu/${dishId}`, {
                     method: 'DELETE',
-                    headers: {
-                        'X-Auth-Token': authToken || ''
-                    },
-                    credentials: 'include'
+                    headers: window.getAdminAuthHeaders()
                 });
 
                 if (!response.ok) {
@@ -370,17 +330,13 @@ async function initBackend() {
             }
 
             try {
-                // Get auth token from localStorage
-                const authToken = localStorage.getItem('admin_auth_token');
-                
                 // Update name and price
                 const updateResponse = await fetch(`${BACKEND_URL}/api/menu/${dishId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Auth-Token': authToken || ''
+                        ...window.getAdminAuthHeaders()
                     },
-                    credentials: 'include',
                     body: JSON.stringify({ name, price })
                 });
 
@@ -393,16 +349,9 @@ async function initBackend() {
                 if (imageInput.files.length > 0) {
                     const formData = new FormData();
                     formData.append('image', imageInput.files[0]);
-                    
-                    // Get auth token from localStorage
-                    const authToken = localStorage.getItem('admin_auth_token');
-
                     const imageResponse = await fetch(`${BACKEND_URL}/api/menu/${dishId}/image`, {
                         method: 'POST',
-                        headers: {
-                            'X-Auth-Token': authToken || ''
-                        },
-                        credentials: 'include',
+                        headers: window.getAdminAuthHeaders(),
                         body: formData
                     });
 

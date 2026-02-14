@@ -123,6 +123,7 @@
         </div>
     </div>
 
+    <script src="js/admin-auth.js"></script>
     <script>
         let BACKEND_URL;
 
@@ -132,7 +133,6 @@ async function initBackend() {
   BACKEND_URL = cfg.backend;
 }
         const AUTH_KEY = 'admin_authenticated';
-        const AUTH_TOKEN_KEY = 'admin_auth_token';
         const bookingsTableBody = document.querySelector('#bookingsTable tbody');
         const bookingsEmptyState = document.getElementById('bookingsEmpty');
         const searchInput = document.getElementById('bookingSearch');
@@ -240,7 +240,7 @@ async function start() {
                 let url = `${BACKEND_URL}/admin/available-rooms?roomType=${roomType}&checkIn=${checkIn}&checkOut=${checkOut}`;
                 if (excludeBookingId) url += `&excludeBookingId=${encodeURIComponent(excludeBookingId)}`;
 
-                const res = await fetch(url, { credentials: 'include' });
+                const res = await fetch(url, { headers: window.getAdminAuthHeaders() });
                 if (!res.ok) throw new Error('Failed to load rooms');
                 const data = await res.json();
 
@@ -260,7 +260,7 @@ async function start() {
 
         function ensureClientAuth() {
             const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
-            const tokenExists = Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
+            const tokenExists = window.isAdminAuthenticated && window.isAdminAuthenticated();
             if (!sessionAuthed && !tokenExists) {
                 window.location.href = `${window.location.origin}/admin.html`;
                 return false;
@@ -272,7 +272,7 @@ async function start() {
             bookingsEmptyState.textContent = 'Loading bookings…';
             bookingsTableBody.innerHTML = '';
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/bookings/all?includeDeleted=true`, { credentials: 'include' });
+                const res = await fetch(`${BACKEND_URL}/admin/bookings/all?includeDeleted=true`, { headers: window.getAdminAuthHeaders() });
                 if (!res.ok) throw new Error('Failed to load bookings');
                 bookingsCache = await res.json();
                 renderBookings();
@@ -418,8 +418,7 @@ async function start() {
                 bookingSubmitBtn.disabled = true;
                 const res = await fetch(url, {
                     method,
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();

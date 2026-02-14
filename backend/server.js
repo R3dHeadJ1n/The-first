@@ -6,10 +6,16 @@ const cors = require('cors');
 const https = require('https');
 const path = require('path');
 const session = require('express-session');
+const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const multer = require('multer');
 const db = require('./db');
+
+// Admin auth (from env, fallback for dev only)
+const ADMIN_LOGIN = process.env.ADMIN_LOGIN || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+const ADMIN_TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || 'change-me-in-production';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,17 +44,28 @@ app.use(session({
     }
 }));
 
-// Admin credentials (default: admin/admin)
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'admin';
+// JWT admin auth middleware - verifies Authorization: Bearer <token>
+function verifyAdminToken(req, res, next) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+        const decoded = jwt.verify(token, ADMIN_TOKEN_SECRET);
+        req.adminUser = decoded;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+}
 
-// Authentication middleware
+// Legacy session middleware (kept for compatibility, but admin routes use JWT)
 function requireAuth(req, res, next) {
     if (req.session && req.session.authenticated) {
         return next();
-    } else {
-        return res.status(401).json({ error: 'Unauthorized' });
     }
+    return res.status(401).json({ error: 'Unauthorized' });
 }
 
 const MENU_IMAGES_DIR = path.join(__dirname, 'uploads', 'menu');
@@ -481,36 +498,47 @@ app.get('/admin/status', (req, res) => {
     }
 });
 
-// Admin login endpoint
-app.post('/admin/login', (req, res) => {
+// POST /api/admin/login - Token-based admin login (returns JWT)
+app.post('/api/admin/login', (req, res) => {
     try {
-        console.log('Login attempt:', { username: req.body.username, hasPassword: !!req.body.password });
-        console.log('Session ID:', req.sessionID);
-        
         const { username, password } = req.body;
-        
         if (!username || !password) {
             return res.status(400).json({ success: false, error: 'Username and password are required' });
         }
-        
-        if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-            // Set session data
-            req.session.authenticated = true;
-            req.session.username = username;
-            
-            // Save session explicitly
-            req.session.save((err) => {
-                if (err) {
-                    console.error('Session save error:', err);
-                    return res.status(500).json({ success: false, error: 'Failed to save session: ' + err.message });
-                }
-                console.log('Login successful, session saved');
-                res.json({ success: true });
-            });
-        } else {
-            console.log('Login failed - invalid credentials');
-            res.status(401).json({ success: false, error: 'Invalid credentials' });
+        if (username !== ADMIN_LOGIN || password !== ADMIN_PASSWORD) {
+            return res.status(401).json({ success: false, error: 'Invalid username or password' });
         }
+        const token = jwt.sign(
+            { sub: username, iat: Math.floor(Date.now() / 1000) },
+            ADMIN_TOKEN_SECRET,
+            { expiresIn: '12h' }
+        );
+        res.json({ success: true, token });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ success: false, error: 'Login failed' });
+    }
+});
+
+// Legacy admin login (session) - kept for compatibility, redirects to token flow
+app.post('/admin/login', (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+            return res.status(400).json({ success: false, error: 'Username and password are required' });
+        }
+        if (username !== ADMIN_LOGIN || password !== ADMIN_PASSWORD) {
+            return res.status(401).json({ success: false, error: 'Invalid username or password' });
+        }
+        req.session.authenticated = true;
+        req.session.username = username;
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ success: false, error: 'Failed to save session' });
+            }
+            res.json({ success: true });
+        });
     } catch (error) {
         console.error('Login endpoint error:', error);
         res.status(500).json({ success: false, error: 'Server error: ' + error.message });
@@ -527,17 +555,24 @@ app.post('/admin/logout', (req, res) => {
     });
 });
 
-// Check authentication status
+// Check authentication status (supports Bearer token or session)
 app.get('/admin/check-auth', (req, res) => {
     if (req.session && req.session.authenticated) {
-        res.json({ authenticated: true });
-    } else {
-        res.json({ authenticated: false });
+        return res.json({ authenticated: true });
     }
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (token) {
+        try {
+            jwt.verify(token, ADMIN_TOKEN_SECRET);
+            return res.json({ authenticated: true });
+        } catch (e) { /* invalid */ }
+    }
+    res.json({ authenticated: false });
 });
 
-// GET /admin/bookings - Get all confirmed/admin bookings (must be before static middleware)
-app.get('/admin/bookings', async (req, res) => {
+// GET /admin/bookings - Get all confirmed/admin bookings
+app.get('/admin/bookings', verifyAdminToken, async (req, res) => {
     try {
         console.log('GET /admin/bookings - Request received');
         const allBookings = await readBookingsFromDb();
@@ -564,8 +599,7 @@ app.get('/admin/bookings', async (req, res) => {
     }
 });
 
-// GET /admin/unconfirmed-bookings - Get all unconfirmed user bookings
-app.get('/admin/unconfirmed-bookings', async (req, res) => {
+app.get('/admin/unconfirmed-bookings', verifyAdminToken, async (req, res) => {
     try {
         console.log('GET /admin/unconfirmed-bookings - Request received');
         const allBookings = await readBookingsFromDb();
@@ -589,8 +623,7 @@ app.get('/admin/unconfirmed-bookings', async (req, res) => {
     }
 });
 
-// Orders API (admin)
-app.get('/admin/orders/unconfirmed', async (req, res) => {
+app.get('/admin/orders/unconfirmed', verifyAdminToken, async (req, res) => {
     try {
         const data = await readOrders();
         const list = data.orders.filter(o => o.status === 'unconfirmed');
@@ -601,7 +634,7 @@ app.get('/admin/orders/unconfirmed', async (req, res) => {
     }
 });
 
-app.get('/admin/orders/live', async (req, res) => {
+app.get('/admin/orders/live', verifyAdminToken, async (req, res) => {
     try {
         const data = await readOrders();
         const list = data.orders.filter(o => o.status === 'live');
@@ -612,7 +645,7 @@ app.get('/admin/orders/live', async (req, res) => {
     }
 });
 
-app.get('/admin/orders/all', async (req, res) => {
+app.get('/admin/orders/all', verifyAdminToken, async (req, res) => {
     try {
         const data = await readOrders();
         let list = data.orders;
@@ -629,7 +662,7 @@ app.get('/admin/orders/all', async (req, res) => {
     }
 });
 
-app.get('/admin/bookings/all', async (req, res) => {
+app.get('/admin/bookings/all', verifyAdminToken, async (req, res) => {
     try {
         const includeDeleted = String(req.query.includeDeleted || '').toLowerCase() === 'true';
         const allBookings = await readBookingsFromDb(includeDeleted);
@@ -640,7 +673,7 @@ app.get('/admin/bookings/all', async (req, res) => {
     }
 });
 
-app.post('/admin/bookings', async (req, res) => {
+app.post('/admin/bookings', verifyAdminToken, async (req, res) => {
     try {
         const { roomType, roomId, checkIn, checkOut, guests, name, surname, phone, status } = req.body || {};
         if (!roomType || !checkIn || !checkOut || !guests || !name || !surname || !phone) {
@@ -692,7 +725,7 @@ app.post('/admin/bookings', async (req, res) => {
     }
 });
 
-app.put('/admin/bookings/:id', async (req, res) => {
+app.put('/admin/bookings/:id', verifyAdminToken, async (req, res) => {
     try {
         const bookingId = req.params.id;
         if (!bookingId) return res.status(400).json({ error: 'booking id is required' });
@@ -716,7 +749,7 @@ app.put('/admin/bookings/:id', async (req, res) => {
     }
 });
 
-app.delete('/admin/bookings/:id', async (req, res) => {
+app.delete('/admin/bookings/:id', verifyAdminToken, async (req, res) => {
     try {
         const bookingId = req.params.id;
         if (!bookingId) return res.status(400).json({ error: 'booking id is required' });
@@ -764,7 +797,7 @@ function updateOrderTelegramMessageWithComplete(orderId, newText) {
     });
 }
 
-app.post('/admin/orders/:id/confirm', async (req, res) => {
+app.post('/admin/orders/:id/confirm', verifyAdminToken, async (req, res) => {
     try {
         const orderId = req.params.id;
         const ok = await updateOrderStatus(orderId, 'live');
@@ -781,7 +814,7 @@ app.post('/admin/orders/:id/confirm', async (req, res) => {
     }
 });
 
-app.post('/admin/orders/:id/decline', async (req, res) => {
+app.post('/admin/orders/:id/decline', verifyAdminToken, async (req, res) => {
     try {
         const orderId = req.params.id;
         const order = await fetchOrderByPublicId(orderId);
@@ -796,7 +829,7 @@ app.post('/admin/orders/:id/decline', async (req, res) => {
     }
 });
 
-app.post('/admin/orders/:id/complete', async (req, res) => {
+app.post('/admin/orders/:id/complete', verifyAdminToken, async (req, res) => {
     try {
         const orderId = req.params.id;
         const order = await fetchOrderByPublicId(orderId);
@@ -811,7 +844,7 @@ app.post('/admin/orders/:id/complete', async (req, res) => {
     }
 });
 
-app.post('/admin/orders', async (req, res) => {
+app.post('/admin/orders', verifyAdminToken, async (req, res) => {
     try {
         const { name, phone, communication, items = [], status } = req.body || {};
         if (!Array.isArray(items) || items.length === 0) {
@@ -852,7 +885,7 @@ app.post('/admin/orders', async (req, res) => {
     }
 });
 
-app.put('/admin/orders/:id', async (req, res) => {
+app.put('/admin/orders/:id', verifyAdminToken, async (req, res) => {
     try {
         const orderId = req.params.id;
         if (!orderId) return res.status(400).json({ error: 'order id is required' });
@@ -867,7 +900,7 @@ app.put('/admin/orders/:id', async (req, res) => {
     }
 });
 
-app.delete('/admin/orders/:id', async (req, res) => {
+app.delete('/admin/orders/:id', verifyAdminToken, async (req, res) => {
     try {
         const orderId = req.params.id;
         if (!orderId) return res.status(400).json({ error: 'order id is required' });
@@ -882,7 +915,7 @@ app.delete('/admin/orders/:id', async (req, res) => {
     }
 });
 
-app.post('/admin/clear-history', async (req, res) => {
+app.post('/admin/clear-history', verifyAdminToken, async (req, res) => {
     try {
         const cleared = await clearOrdersHistoryInDb();
         res.json({ success: cleared });
@@ -891,7 +924,7 @@ app.post('/admin/clear-history', async (req, res) => {
     }
 });
 
-app.post('/admin/clear-bookings-history', async (req, res) => {
+app.post('/admin/clear-bookings-history', verifyAdminToken, async (req, res) => {
     try {
         await db.query(`DELETE FROM bookings WHERE status = 'deleted'`);
         res.json({ success: true });
@@ -915,8 +948,7 @@ function formatOrderLines(order) {
     return lines;
 }
 
-// DELETE /admin/booking/:id - Mark booking as deleted (red row) instead of removing
-app.delete('/admin/booking/:id', async (req, res) => {
+app.delete('/admin/booking/:id', verifyAdminToken, async (req, res) => {
     try {
         const bookingId = req.params.id;
         const success = await markBookingAsDeleted(bookingId);
@@ -933,8 +965,7 @@ app.delete('/admin/booking/:id', async (req, res) => {
     }
 });
 
-// GET /admin/available-rooms - Get available rooms for a date range
-app.get('/admin/available-rooms', async (req, res) => {
+app.get('/admin/available-rooms', verifyAdminToken, async (req, res) => {
     try {
         const { roomType, checkIn, checkOut, excludeBookingId } = req.query;
         
@@ -1035,8 +1066,7 @@ app.get('/admin/available-rooms', async (req, res) => {
     }
 });
 
-// POST /admin/confirm-booking/:id - Confirm an unconfirmed booking with room assignment
-app.post('/admin/confirm-booking/:id', async (req, res) => {
+app.post('/admin/confirm-booking/:id', verifyAdminToken, async (req, res) => {
     try {
         const bookingId = req.params.id;
         const { roomId } = req.body;
@@ -1162,8 +1192,7 @@ function calcNightsAndTotal(checkIn, checkOut, roomType) {
     return { nights, pricePerNight, total };
 }
 
-// POST /admin/book-room - Admin marks room as unavailable
-app.post('/admin/book-room', async (req, res) => {
+app.post('/admin/book-room', verifyAdminToken, async (req, res) => {
     try {
         console.log('POST /admin/book-room - Request received');
         console.log('Request body:', JSON.stringify(req.body, null, 2));
@@ -1229,8 +1258,7 @@ app.post('/admin/book-room', async (req, res) => {
     }
 });
 
-// DELETE /admin/book-room - Admin removes unavailability (marks as deleted)
-app.delete('/admin/book-room', async (req, res) => {
+app.delete('/admin/book-room', verifyAdminToken, async (req, res) => {
     try {
         const { roomId, checkIn, checkOut } = req.body;
         
@@ -2290,19 +2318,7 @@ app.get('/api/menu', async (req, res) => {
 });
 
 // POST /api/menu/:id/image - Upload/update image for a dish (admin only)
-app.post('/api/menu/:id/image', (req, res, next) => {
-    // Check both session and localStorage token for cross-window auth
-    if (req.session && req.session.authenticated) {
-        return next();
-    }
-    // Allow if localStorage token exists (set by admin panel)
-    const authToken = req.headers['x-auth-token'];
-    if (authToken) {
-        // Token exists, allow request (basic check)
-        return next();
-    }
-    return res.status(401).json({ error: 'Unauthorized' });
-}, upload.single('image'), async (req, res) => {
+app.post('/api/menu/:id/image', verifyAdminToken, upload.single('image'), async (req, res) => {
     try {
         const dishId = req.params.id;
 
@@ -2343,13 +2359,7 @@ app.post('/api/menu/:id/image', (req, res, next) => {
 // Mount menu API routes - using Router ensures DELETE is properly matched
 const menuApiRouter = express.Router();
 
-const menuAuth = (req, res, next) => {
-    if (req.session && req.session.authenticated) return next();
-    if (req.headers['x-auth-token']) return next();
-    return res.status(401).json({ error: 'Unauthorized' });
-};
-
-menuApiRouter.delete('/:id', menuAuth, async (req, res) => {
+menuApiRouter.delete('/:id', verifyAdminToken, async (req, res) => {
     try {
         const dishId = req.params.id;
         const result = await db.query(
@@ -2380,19 +2390,7 @@ menuApiRouter.delete('/:id', menuAuth, async (req, res) => {
 app.use('/api/menu', menuApiRouter);
 
 // PUT /api/menu/:id - Update dish name and price (admin only)
-app.put('/api/menu/:id', (req, res, next) => {
-    // Check both session and localStorage token for cross-window auth
-    if (req.session && req.session.authenticated) {
-        return next();
-    }
-    // Allow if localStorage token exists (set by admin panel)
-    const authToken = req.headers['x-auth-token'];
-    if (authToken) {
-        // Token exists, allow request (basic check)
-        return next();
-    }
-    return res.status(401).json({ error: 'Unauthorized' });
-}, async (req, res) => {
+app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
     try {
         const dishId = req.params.id;
         const { name, price } = req.body;

@@ -260,7 +260,8 @@
 
     async function loadBookings() {
         try {
-            const res = await fetch(`${BACKEND_URL}/admin/bookings/all?includeDeleted=true`, { credentials: 'include' });
+            const headers = window.getAdminAuthHeaders ? window.getAdminAuthHeaders() : {};
+            const res = await fetch(`${BACKEND_URL}/admin/bookings/all?includeDeleted=true`, { headers });
             if (!res.ok) throw new Error('Failed to load bookings');
             bookingsCache = await res.json();
             applyFilters();
@@ -281,7 +282,7 @@
     }
 
     function ensureAuth() {
-        const authed = sessionStorage.getItem('admin_authenticated') === 'true' || !!localStorage.getItem('admin_auth_token');
+        const authed = sessionStorage.getItem('admin_authenticated') === 'true' || (window.isAdminAuthenticated && window.isAdminAuthenticated());
         if (!authed) {
             window.location.href = `${window.location.origin}/admin.html`;
             return false;

@@ -124,6 +124,7 @@
         </div>
     </template>
 
+    <script src="js/admin-auth.js"></script>
     <script>
         let BACKEND_URL;
 
@@ -133,7 +134,6 @@ async function initBackend() {
   BACKEND_URL = cfg.backend;
 }
         const AUTH_KEY = 'admin_authenticated';
-        const AUTH_TOKEN_KEY = 'admin_auth_token';
         const ordersTableBody = document.querySelector('#ordersTable tbody');
         const ordersEmptyState = document.getElementById('ordersEmpty');
         const ordersSearch = document.getElementById('ordersSearch');
@@ -158,7 +158,7 @@ async function initBackend() {
 
         async function loadMenuItems() {
             try {
-                const res = await fetch(`${BACKEND_URL}/api/menu`, { credentials: 'include' });
+                const res = await fetch(`${BACKEND_URL}/api/menu`, { headers: window.getAdminAuthHeaders() });
                 if (res.ok) {
                     const data = await res.json();
                     menuItemsCache = data.items || data || [];
@@ -200,9 +200,9 @@ async function initBackend() {
 
         function ensureOrdersAuth() {
             const sessionAuthed = sessionStorage.getItem(AUTH_KEY) === 'true';
-            const tokenExists = Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
+            const tokenExists = window.isAdminAuthenticated && window.isAdminAuthenticated();
             if (!sessionAuthed && !tokenExists) {
-                window.location.href = `${BACKEND_URL}/admin.html`;
+                window.location.href = `${window.location.origin}/admin.html`;
                 return false;
             }
             return true;
@@ -212,7 +212,7 @@ async function initBackend() {
             ordersEmptyState.textContent = 'Loading orders…';
             ordersTableBody.innerHTML = '';
             try {
-                const res = await fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { credentials: 'include' });
+                const res = await fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { headers: window.getAdminAuthHeaders() });
                 if (!res.ok) throw new Error('Failed to load orders');
                 ordersCache = await res.json();
                 renderOrders();
@@ -380,8 +380,7 @@ async function initBackend() {
                 orderSubmitBtn.disabled = true;
                 const res = await fetch(url, {
                     method,
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
