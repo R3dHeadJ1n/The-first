@@ -899,9 +899,12 @@ app.post('/admin/orders/:id/complete', verifyAdminToken, async (req, res) => {
 
 app.post('/admin/orders', verifyAdminToken, async (req, res) => {
     try {
-        const { name, phone, communication, items = [], status } = req.body || {};
+        const { name, phone, communication, items = [], status, type } = req.body || {};
         if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'At least one item is required' });
+        }
+        if (!type || !isValidOrderType(type)) {
+            return res.status(400).json({ error: 'Order type is required. Must be one of: DINE IN, ROOM SERVICE, DELIVERY' });
         }
 
         const sanitizedItems = items
@@ -927,7 +930,8 @@ app.post('/admin/orders', verifyAdminToken, async (req, res) => {
             communication: communication || '',
             items: sanitizedItems,
             total,
-            status: status || 'unconfirmed'
+            status: status || 'unconfirmed',
+            type: String(type).trim()
         });
 
         const order = await fetchOrderByPublicId(orderId);

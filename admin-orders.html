@@ -43,6 +43,7 @@
                             <th>Customer</th>
                             <th>Contact</th>
                             <th>Items</th>
+                            <th>Type</th>
                             <th>Date</th>
                             <th>Total</th>
                             <th>Status</th>
@@ -81,6 +82,15 @@
                         <option value="whatsapp">WhatsApp</option>
                         <option value="telegram">Telegram</option>
                         <option value="line">Line</option>
+                    </select>
+                </label>
+                <label>
+                    Order type <span style="color: #d32f2f;">*</span>
+                    <select id="orderType" required>
+                        <option value="">— Select type —</option>
+                        <option value="DINE IN">DINE IN</option>
+                        <option value="ROOM SERVICE">ROOM SERVICE</option>
+                        <option value="DELIVERY">DELIVERY</option>
                     </select>
                 </label>
                 <label>
@@ -267,6 +277,7 @@ async function initBackend() {
                 ? new Date(order.createdAt).toISOString().split('T')[0]
                 : '—';
             const totalDisplay = Number(order.total || 0).toFixed(2);
+            const typeDisplay = order.type || '—';
             return `
                 <tr>
                     <td><strong>${order.name || '—'}</strong></td>
@@ -275,6 +286,7 @@ async function initBackend() {
                         <div class="muted">${order.communication || ''}</div>
                     </td>
                     <td>${itemsPreview}</td>
+                    <td>${typeDisplay}</td>
                     <td>${createdDate}</td>
                     <td>${totalDisplay} THB</td>
                     <td><span class="${chipClass}">${status}</span></td>
@@ -301,6 +313,9 @@ async function initBackend() {
             document.getElementById('orderName').value = order?.name || '';
             document.getElementById('orderPhone').value = order?.phone || '';
             document.getElementById('orderCommunication').value = order?.communication || '';
+            const orderTypeEl = document.getElementById('orderType');
+            orderTypeEl.value = order?.type || '';
+            orderTypeEl.required = true;
             document.getElementById('orderStatus').value = order?.status || 'unconfirmed';
             itemsContainer.innerHTML = '';
             const items = order?.items && order.items.length ? order.items : [{ dish_id: '', quantity: 1, price: 0 }];
@@ -364,10 +379,16 @@ async function initBackend() {
                 showOrdersToast('Please add at least one item', true);
                 return;
             }
+            const type = document.getElementById('orderType').value?.trim();
+            if (!type || !['DINE IN', 'ROOM SERVICE', 'DELIVERY'].includes(type)) {
+                showOrdersToast('Please select order type (DINE IN, ROOM SERVICE, or DELIVERY)', true);
+                return;
+            }
             const payload = {
                 name: document.getElementById('orderName').value.trim(),
                 phone: document.getElementById('orderPhone').value.trim(),
                 communication: document.getElementById('orderCommunication').value,
+                type,
                 status: document.getElementById('orderStatus').value,
                 items
             };
