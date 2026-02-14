@@ -1150,7 +1150,7 @@ app.post('/admin/confirm-booking/:id', verifyAdminToken, async (req, res) => {
 
 // Telegram Bot Configuration
 const TELEGRAM_BOT_TOKEN = '8426189458:AAH9B4ezmtN-MRj5sSnAUbzqvyLjmUEl28o';
-const TELEGRAM_CHAT_ID = '747453534';
+const TELEGRAM_CHAT_ID = '-5175900428';
 const TELEGRAM_ADMIN_CHAT_IDS = [TELEGRAM_CHAT_ID];
 const TELEGRAM_API_BASE = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const TELEGRAM_API_URL = `${TELEGRAM_API_BASE}/sendMessage`;
