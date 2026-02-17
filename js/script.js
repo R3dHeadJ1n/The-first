@@ -808,7 +808,7 @@ function handleBookingSubmit(event) {
             if (result && result.success) {
                 if (bookingModal) bookingModal.classList.remove('show');
                 document.body.style.overflow = '';
-                window.open('booking-confirmed.html', '_blank');
+                window.location.href = 'booking-confirmed.html';
             } else {
                 const errorMsg = result?.error || 'Failed to submit booking. Please try again.';
                 persistToastForRefresh(errorMsg, 'error');
