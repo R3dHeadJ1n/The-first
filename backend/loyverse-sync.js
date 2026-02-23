@@ -73,16 +73,17 @@ async function fetchAllReceipts(token) {
 
 /**
  * Build map SKU -> dish_id from menu_items.
+ * Only maps real SKUs; skips NULL, empty, or non-string sku (e.g. variants without POS SKU).
  * @param {object} db - { query }
  * @returns {Promise<Map<string, string>>}
  */
 async function getSkuToDishIdMap(db) {
-    const result = await db.query(
-        'SELECT dish_id, sku FROM menu_items WHERE sku IS NOT NULL AND sku <> \'\''
-    );
+    const result = await db.query('SELECT dish_id, sku FROM menu_items');
     const map = new Map();
     for (const row of result.rows) {
-        map.set(String(row.sku).trim(), row.dish_id);
+        if (!row.dish_id) continue;
+        if (!row.sku || typeof row.sku !== 'string' || !row.sku.trim()) continue;
+        map.set(row.sku.trim(), row.dish_id);
     }
     return map;
 }
