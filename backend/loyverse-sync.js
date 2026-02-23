@@ -11,15 +11,17 @@ const MAX_PER_PAGE = 250;
 
 /**
  * Fetch one page of receipts from Loyverse API.
+ * Free plan allows only last 31 days; use created_at_min to avoid 402 PAYMENT_REQUIRED.
  * @param {string} token - Bearer token
  * @param {string} [cursor] - Pagination cursor
  * @returns {Promise<{ receipts: any[], cursor?: string }>}
  */
 function fetchReceiptsPage(token, cursor = null) {
     return new Promise((resolve, reject) => {
+        const dateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const path = cursor
-            ? `${RECEIPTS_PATH}?limit=${MAX_PER_PAGE}&cursor=${encodeURIComponent(cursor)}`
-            : `${RECEIPTS_PATH}?limit=${MAX_PER_PAGE}`;
+            ? `${RECEIPTS_PATH}?limit=${MAX_PER_PAGE}&created_at_min=${encodeURIComponent(dateFrom)}&cursor=${encodeURIComponent(cursor)}`
+            : `${RECEIPTS_PATH}?limit=${MAX_PER_PAGE}&created_at_min=${encodeURIComponent(dateFrom)}`;
         const options = {
             hostname: 'api.loyverse.com',
             path: path,
