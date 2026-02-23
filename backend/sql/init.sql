@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     public_id TEXT UNIQUE NOT NULL,
+    receipt_number TEXT,
     customer_name VARCHAR(255),
     customer_phone VARCHAR(50),
     communication VARCHAR(50),
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS orders (
     type VARCHAR(20) CHECK (type IN ('DINE IN', 'ROOM SERVICE', 'DELIVERY'))
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_receipt_number ON orders(receipt_number) WHERE receipt_number IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_public_id ON orders(public_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_type ON orders(type);
@@ -50,6 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_order_items_dish_id ON order_items(dish_id);
 CREATE TABLE IF NOT EXISTS menu_items (
     id SERIAL PRIMARY KEY,
     dish_id TEXT UNIQUE NOT NULL,
+    sku TEXT,
     category VARCHAR(100) NOT NULL,
     name VARCHAR(255) NOT NULL,
     name_ru VARCHAR(255),
@@ -59,4 +62,5 @@ CREATE TABLE IF NOT EXISTS menu_items (
     display_order INTEGER DEFAULT 0
 );
 
+CREATE INDEX IF NOT EXISTS idx_menu_items_sku ON menu_items(sku) WHERE sku IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_menu_items_dish_id ON menu_items(dish_id);

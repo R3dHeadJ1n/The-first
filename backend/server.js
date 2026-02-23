@@ -12,6 +12,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const multer = require('multer');
 const db = require('./db');
+const loyverseSync = require('./loyverse-sync');
 
 // Admin auth - must be set via environment variables (no default credentials)
 if (!process.env.ADMIN_LOGIN || !process.env.ADMIN_PASSWORD) {
@@ -978,6 +979,30 @@ app.post('/admin/clear-history', verifyAdminToken, async (req, res) => {
         res.json({ success: cleared });
     } catch (e) {
         res.status(500).json({ error: 'Failed to clear history' });
+    }
+});
+
+// POST /admin/loyverse-sync - Trigger Loyverse receipts sync manually (admin only)
+app.post('/admin/loyverse-sync', verifyAdminToken, async (req, res) => {
+    try {
+        const token = process.env.LOYVERSE_API_TOKEN;
+        if (!token) {
+            return res.status(500).json({
+                success: false,
+                error: 'LOYVERSE_API_TOKEN is not set in environment'
+            });
+        }
+        const result = await loyverseSync.syncLoyverseReceipts(db, token);
+        res.json({
+            success: true,
+            fetched: result.fetched,
+            inserted: result.inserted,
+            skipped: result.skipped,
+            errors: result.errors.length ? result.errors : undefined
+        });
+    } catch (e) {
+        console.error('Loyverse sync error:', e);
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -2503,10 +2528,33 @@ app.use('/api/menu-images', express.static(MENU_IMAGES_DIR));
 // Serve static files from the parent directory (AFTER all API routes)
 app.use(express.static(path.join(__dirname, '..')));
 
+// Loyverse sync: run twice daily (every 12 hours). First run 30s after startup.
+const LOYVERSE_SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+function scheduleLoyverseSync() {
+    const token = process.env.LOYVERSE_API_TOKEN;
+    if (!token) {
+        console.log('Loyverse sync disabled: LOYVERSE_API_TOKEN not set');
+        return;
+    }
+    const runSync = () => {
+        loyverseSync.syncLoyverseReceipts(db, token)
+            .then(r => {
+                if (r.fetched > 0 || r.inserted > 0 || r.errors.length > 0) {
+                    console.log(`Loyverse sync: fetched=${r.fetched} inserted=${r.inserted} skipped=${r.skipped}` + (r.errors.length ? ` errors=${r.errors.length}` : ''));
+                }
+                if (r.errors.length) r.errors.forEach(e => console.error('Loyverse sync:', e));
+            })
+            .catch(err => console.error('Loyverse sync failed:', err));
+    };
+    setTimeout(runSync, 30 * 1000); // first run 30s after start
+    setInterval(runSync, LOYVERSE_SYNC_INTERVAL_MS);
+}
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend server running on http://0.0.0.0:${PORT}`);
     startTelegramPolling();
+    scheduleLoyverseSync();
     // Parse menu on startup
     loadMenuItemsFromDb()
         .then(items => {
