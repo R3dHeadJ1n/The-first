@@ -71,6 +71,9 @@ async function fetchAllReceipts(token) {
     return all;
 }
 
+/** SKUs to skip: hotel (not restaurant) items. */
+const SKU_SKIP_LIST = new Set(['10040', '10041']);
+
 /**
  * Build map SKU -> dish_id from menu_items.
  * Only maps real SKUs; skips NULL, empty, or non-string sku (e.g. variants without POS SKU).
@@ -83,14 +86,16 @@ async function getSkuToDishIdMap(db) {
     for (const row of result.rows) {
         if (!row.dish_id) continue;
         if (!row.sku || typeof row.sku !== 'string' || !row.sku.trim()) continue;
-        map.set(row.sku.trim(), row.dish_id);
+        const skuKey = String(row.sku).trim();
+        if (SKU_SKIP_LIST.has(skuKey)) continue;
+        map.set(skuKey, row.dish_id);
     }
     return map;
 }
 
 /**
  * Normalize Loyverse line item to { sku, quantity, price }.
- * API may use "price" or "unit_price" and quantity.
+ * API may use "price" or "unit_price"; SKU may be in "sku", "variant_id", or "item_id".
  */
 function normalizeLineItem(item) {
     if (!item || item.quantity == null) return null;
@@ -100,8 +105,15 @@ function normalizeLineItem(item) {
     const priceVal = typeof rawPrice === 'object' && rawPrice != null && rawPrice.amount != null ? rawPrice.amount : rawPrice;
     const price = Number(priceVal);
     if (!Number.isFinite(price) || price < 0) return null;
-    const sku = item.sku != null ? String(item.sku).trim() : null;
+    const rawSku = item.sku ?? item.variant_id ?? item.item_id;
+    const sku = rawSku != null ? String(rawSku).trim() : null;
     return { sku, quantity: qty, price: Math.round(price) };
+}
+
+/** Returns true if this SKU should be skipped (hotel, not restaurant). */
+function isSkuSkipped(sku) {
+    if (sku == null || sku === '') return false;
+    return SKU_SKIP_LIST.has(String(sku).trim());
 }
 
 /**
@@ -148,10 +160,10 @@ async function insertLoyverseReceipt(db, skuToDishId, receipt) {
         const orderId = orderResult.rows[0].id;
 
         for (const item of normalizedItems) {
-            const dishId = item.sku ? skuToDishId.get(item.sku) : null;
-            if (!dishId) {
-                continue;
-            }
+            if (isSkuSkipped(item.sku)) continue;
+            const skuKey = item.sku != null ? String(item.sku).trim() : '';
+            const dishId = skuKey ? skuToDishId.get(skuKey) : null;
+            if (!dishId) continue;
             await client.query(
                 `INSERT INTO order_items (order_id, dish_id, quantity, price)
                  VALUES ($1, $2, $3, $4)`,
