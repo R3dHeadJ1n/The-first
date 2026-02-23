@@ -94,8 +94,9 @@ async function getSkuToDishIdMap(db) {
 }
 
 /**
- * Normalize Loyverse line item to { sku, quantity, price }.
+ * Normalize Loyverse line item to { sku, quantity, price, item_name, line_modifiers }.
  * API may use "price" or "unit_price"; SKU may be in "sku", "variant_id", or "item_id".
+ * Loyverse price is source of truth. Subtotal = price * quantity (DB computes it).
  */
 function normalizeLineItem(item) {
     if (!item || item.quantity == null) return null;
@@ -107,13 +108,26 @@ function normalizeLineItem(item) {
     if (!Number.isFinite(price) || price < 0) return null;
     const rawSku = item.sku ?? item.variant_id ?? item.item_id;
     const sku = rawSku != null ? String(rawSku).trim() : null;
-    return { sku, quantity: qty, price: Math.round(price) };
+    const item_name = item.item_name ?? item.name ?? null;
+    const line_modifiers = item.line_modifiers ?? null;
+    return { sku, quantity: qty, price: Math.round(price), item_name, line_modifiers };
 }
 
 /** Returns true if this SKU should be skipped (hotel, not restaurant). */
 function isSkuSkipped(sku) {
     if (sku == null || sku === '') return false;
     return SKU_SKIP_LIST.has(String(sku).trim());
+}
+
+/**
+ * Build a valid dish_id for order_items when SKU has no menu match.
+ * order_items.dish_id is NOT NULL, so we store a readable placeholder.
+ */
+function buildUnmatchedDishId(item) {
+    const name = item.item_name && String(item.item_name).trim();
+    const sku = item.sku != null ? String(item.sku).trim() : '';
+    const part = (name || sku || 'unmatched').slice(0, 200).replace(/[^\w\s-]/g, '_');
+    return `loyverse:${part.trim() || 'unmatched'}`;
 }
 
 /**
@@ -163,11 +177,11 @@ async function insertLoyverseReceipt(db, skuToDishId, receipt) {
             if (isSkuSkipped(item.sku)) continue;
             const skuKey = item.sku != null ? String(item.sku).trim() : '';
             const dishId = skuKey ? skuToDishId.get(skuKey) : null;
-            if (!dishId) continue;
+            const safeDishId = dishId || buildUnmatchedDishId(item);
             await client.query(
                 `INSERT INTO order_items (order_id, dish_id, quantity, price)
                  VALUES ($1, $2, $3, $4)`,
-                [orderId, dishId, item.quantity, item.price]
+                [orderId, safeDishId, item.quantity, item.price]
             );
         }
 
