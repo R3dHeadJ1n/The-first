@@ -174,14 +174,25 @@ async function insertLoyverseReceipt(db, skuToDishId, receipt) {
         const orderId = orderResult.rows[0].id;
 
         for (const item of normalizedItems) {
-            if (isSkuSkipped(item.sku)) continue;
-            const skuKey = item.sku != null ? String(item.sku).trim() : '';
+            // sku приходит строкой, а в БД integer — приводим к строке безопасно
+            const skuKey = item.sku ? String(item.sku).trim() : null;
             const dishId = skuKey ? skuToDishId.get(skuKey) : null;
-            const safeDishId = dishId || buildUnmatchedDishId(item);
+        
+            // ВАЖНО: не пропускаем позиции без SKU
+            const safeDishId = dishId || null;
+        
+            const subtotal = item.price * item.quantity;
+        
             await client.query(
-                `INSERT INTO order_items (order_id, dish_id, quantity, price)
-                 VALUES ($1, $2, $3, $4)`,
-                [orderId, safeDishId, item.quantity, item.price]
+                `INSERT INTO order_items (order_id, dish_id, quantity, price, subtotal)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [
+                    orderId,
+                    safeDishId,   // теперь даже без SKU строка сохранится
+                    item.quantity,
+                    item.price,   // цена из Loyverse (как ты и хотел)
+                    subtotal
+                ]
             );
         }
 
