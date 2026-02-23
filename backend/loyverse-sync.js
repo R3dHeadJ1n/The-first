@@ -6,7 +6,7 @@
 const https = require('https');
 
 const LOYVERSE_API_BASE = 'https://api.loyverse.com/v1.0';
-const RECEIPTS_PATH = '/receipts';
+const RECEIPTS_PATH = '/v1.0/receipts';
 const MAX_PER_PAGE = 250;
 
 /**
