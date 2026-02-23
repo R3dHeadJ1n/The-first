@@ -81,7 +81,9 @@ const SKU_SKIP_LIST = new Set(['10040', '10041']);
  * @returns {Promise<Map<string, string>>}
  */
 async function getSkuToDishIdMap(db) {
-    const result = await db.query('SELECT dish_id, sku FROM menu_items');
+    const result = await db.query(
+        'SELECT dish_id, sku::text as sku FROM menu_items WHERE sku IS NOT NULL'
+    );
     const map = new Map();
     for (const row of result.rows) {
         if (!row.dish_id) continue;
@@ -99,18 +101,39 @@ async function getSkuToDishIdMap(db) {
  * Loyverse price is source of truth. Subtotal = price * quantity (DB computes it).
  */
 function normalizeLineItem(item) {
-    if (!item || item.quantity == null) return null;
-    const qty = Number(item.quantity);
-    if (!Number.isFinite(qty) || qty <= 0) return null;
-    const rawPrice = item.price ?? item.unit_price ?? 0;
-    const priceVal = typeof rawPrice === 'object' && rawPrice != null && rawPrice.amount != null ? rawPrice.amount : rawPrice;
-    const price = Number(priceVal);
-    if (!Number.isFinite(price) || price < 0) return null;
-    const rawSku = item.sku ?? item.variant_id ?? item.item_id;
-    const sku = rawSku != null ? String(rawSku).trim() : null;
-    const item_name = item.item_name ?? item.name ?? null;
-    const line_modifiers = item.line_modifiers ?? null;
-    return { sku, quantity: qty, price: Math.round(price), item_name, line_modifiers };
+    if (!item) return null;
+
+    // Loyverse всегда даёт quantity
+    const qty = Number(item.quantity ?? 0);
+    if (!qty || qty <= 0) return null;
+
+    // Цена в Loyverse может быть:
+    // price: 180
+    // total_money: 180
+    // gross_total_money: 180
+    let price = 0;
+
+    if (item.price != null) {
+        price = Number(item.price);
+    } else if (item.total_money != null) {
+        price = Number(item.total_money);
+    } else if (item.gross_total_money != null) {
+        price = Number(item.gross_total_money);
+    }
+
+    if (!Number.isFinite(price)) {
+        price = 0;
+    }
+
+    // SKU как строка (совместимо с integer в БД)
+    const sku = item.sku != null ? String(item.sku).trim() : null;
+
+    return {
+        sku,
+        quantity: qty,
+        price: Math.round(price),
+        name: item.item_name || 'POS Item'
+    };
 }
 
 /** Returns true if this SKU should be skipped (hotel, not restaurant). */
@@ -158,7 +181,12 @@ async function insertLoyverseReceipt(db, skuToDishId, receipt) {
         : totalMoney;
     const total = totalRaw != null ? Math.round(Number(totalRaw)) : 0;
     const lineItems = Array.isArray(receipt.line_items) ? receipt.line_items : [];
-    const normalizedItems = lineItems.map(normalizeLineItem).filter(Boolean);
+
+console.log('LOYVERSE RAW line_items:', JSON.stringify(lineItems, null, 2));
+
+const normalizedItems = lineItems.map(normalizeLineItem).filter(Boolean);
+
+console.log('NORMALIZED ITEMS:', normalizedItems);
 
     const publicId = `loyverse_${receiptNumber}`;
     const client = await db.pool.connect();
