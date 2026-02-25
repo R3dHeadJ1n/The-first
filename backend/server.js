@@ -2347,6 +2347,7 @@ async function loadMenuItemsFromDb() {
         const result = await db.query(
             `SELECT dish_id, category, name, name_ru, name_th, price, image_path
              FROM menu_items
+             WHERE is_public = true
              ORDER BY display_order, id`
         );
         return result.rows.map(row => ({

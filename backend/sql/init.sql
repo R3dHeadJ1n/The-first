@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS menu_items (
     name_th VARCHAR(255),
     price INTEGER NOT NULL CHECK (price >= 0),
     image_path TEXT,
-    display_order INTEGER DEFAULT 0
+    display_order INTEGER DEFAULT 0,
+    is_public BOOLEAN NOT NULL DEFAULT true
 );
 
 CREATE INDEX IF NOT EXISTS idx_menu_items_sku ON menu_items(sku) WHERE sku IS NOT NULL;
