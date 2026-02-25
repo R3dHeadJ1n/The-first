@@ -2391,7 +2391,7 @@ async function updateMenuItemRecord(dishId, updates) {
 // Menu cache
 let menuCache = null;
 let menuCacheTime = 0;
-const MENU_CACHE_DURATION = 60000; // Cache for 60 seconds
+const MENU_CACHE_DURATION = 10000; // 10 seconds — so is_public / DB changes show up quickly
 
 // Clear menu cache (call this when menu is updated)
 function clearMenuCache() {
