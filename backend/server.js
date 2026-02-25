@@ -2371,7 +2371,7 @@ async function loadExtrasItems(db, extraDishIds, publicOnly = false) {
     const result = await db.query(
         `SELECT dish_id, category, name, name_ru, name_th, price, image_path
          FROM menu_items
-         WHERE dish_id IN (${placeholders}) AND category = 'EXTRAS' ${where}
+         WHERE dish_id IN (${placeholders}) AND UPPER(TRIM(category)) = 'EXTRAS' ${where}
          ORDER BY name`,
         extraDishIds
     );
@@ -2400,7 +2400,7 @@ async function loadMenuItemsFromDb() {
         ]);
         const allExtraIds = [...new Set([].concat(...extrasMap.values()))];
         const extrasItems = allExtraIds.length
-            ? await loadExtrasItems(db, allExtraIds, true)
+            ? await loadExtrasItems(db, allExtraIds, false)
             : [];
         const extrasById = new Map(extrasItems.map(e => [e.id, e]));
 
@@ -2414,8 +2414,8 @@ async function loadMenuItemsFromDb() {
                 price: row.price,
                 image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null
             };
-            const extraIds = extrasMap.get(row.dish_id) || [];
-            item.available_extras = extraIds.map(id => extrasById.get(id)).filter(Boolean);
+            const extraIds = extrasMap.get(String(row.dish_id)) || [];
+            item.available_extras = extraIds.map(id => extrasById.get(String(id))).filter(Boolean);
             return item;
         });
     } catch (error) {
