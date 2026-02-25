@@ -12,6 +12,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const multer = require('multer');
 const db = require('./db');
+const loyverseSync = require('./loyverse-sync');
 
 // Admin auth - must be set via environment variables (no default credentials)
 if (!process.env.ADMIN_LOGIN || !process.env.ADMIN_PASSWORD) {
@@ -978,6 +979,30 @@ app.post('/admin/clear-history', verifyAdminToken, async (req, res) => {
         res.json({ success: cleared });
     } catch (e) {
         res.status(500).json({ error: 'Failed to clear history' });
+    }
+});
+
+// POST /admin/loyverse-sync - Trigger Loyverse receipts sync manually (admin only)
+app.post('/admin/loyverse-sync', verifyAdminToken, async (req, res) => {
+    try {
+        const token = process.env.LOYVERSE_API_TOKEN;
+        if (!token) {
+            return res.status(500).json({
+                success: false,
+                error: 'LOYVERSE_API_TOKEN is not set in environment'
+            });
+        }
+        const result = await loyverseSync.syncLoyverseReceipts(db, token);
+        res.json({
+            success: true,
+            fetched: result.fetched,
+            inserted: result.inserted,
+            skipped: result.skipped,
+            errors: result.errors.length ? result.errors : undefined
+        });
+    } catch (e) {
+        console.error('Loyverse sync error:', e);
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -2316,12 +2341,13 @@ app.post('/book-room', async (req, res) => {
 // MENU MANAGEMENT FUNCTIONS
 // ============================
 
-// Load menu items from database
+// Load menu items from database (public only — for menu.html)
 async function loadMenuItemsFromDb() {
     try {
         const result = await db.query(
             `SELECT dish_id, category, name, name_ru, name_th, price, image_path
              FROM menu_items
+             WHERE is_public = true
              ORDER BY display_order, id`
         );
         return result.rows.map(row => ({
@@ -2339,14 +2365,62 @@ async function loadMenuItemsFromDb() {
     }
 }
 
+// Load ALL menu items (no is_public filter) — for admin onlyy
+async function loadAllMenuItemsFromDb() {
+    try {
+        const result = await db.query(
+            `SELECT dish_id, category, name, name_ru, name_th, price, image_path, is_public
+             FROM menu_items
+             ORDER BY display_order, id`
+        );
+        return result.rows.map(row => ({
+            id: row.dish_id,
+            category: row.category,
+            name: row.name,
+            name_ru: row.name_ru || null,
+            name_th: row.name_th || null,
+            price: row.price,
+            image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null,
+            is_public: row.is_public !== false
+        }));
+    } catch (error) {
+        console.error('Error loading all menu items:', error);
+        return [];
+    }
+}
+
 async function updateMenuItemRecord(dishId, updates) {
     try {
-        const { name, name_ru, name_th, price } = updates;
+        const { name, name_ru, name_th, price, is_public } = updates;
+        const sets = [];
+        const values = [dishId];
+        let idx = 2;
+        if (name !== undefined) {
+            sets.push(`name = $${idx++}`);
+            values.push(name || '');
+        }
+        if (name_ru !== undefined) {
+            sets.push(`name_ru = $${idx++}`);
+            values.push(name_ru || null);
+        }
+        if (name_th !== undefined) {
+            sets.push(`name_th = $${idx++}`);
+            values.push(name_th || null);
+        }
+        if (price !== undefined) {
+            sets.push(`price = $${idx++}`);
+            values.push(price);
+        }
+        if (is_public !== undefined) {
+            sets.push(`is_public = $${idx++}`);
+            values.push(!!is_public);
+        }
+        if (sets.length === 0) {
+            return { success: false, error: 'No updates provided' };
+        }
         const result = await db.query(
-            `UPDATE menu_items
-             SET name = $2, name_ru = $3, name_th = $4, price = $5
-             WHERE dish_id = $1`,
-            [dishId, name || '', name_ru || null, name_th || null, price]
+            `UPDATE menu_items SET ${sets.join(', ')} WHERE dish_id = $1`,
+            values
         );
         if (result.rowCount === 0) {
             return { success: false, error: 'Dish not found' };
@@ -2365,7 +2439,7 @@ async function updateMenuItemRecord(dishId, updates) {
 // Menu cache
 let menuCache = null;
 let menuCacheTime = 0;
-const MENU_CACHE_DURATION = 60000; // Cache for 60 seconds
+const MENU_CACHE_DURATION = 10000; // 10 seconds — so is_public / DB changes show up quickly
 
 // Clear menu cache (call this when menu is updated)
 function clearMenuCache() {
@@ -2391,6 +2465,17 @@ app.get('/api/menu', async (req, res) => {
         res.json(menuItems);
     } catch (error) {
         console.error('Error getting menu:', error);
+        res.status(500).json({ error: 'Failed to load menu' });
+    }
+});
+
+// GET /api/admin/menu - All menu items including non-public (admin only)
+app.get('/api/admin/menu', verifyAdminToken, async (req, res) => {
+    try {
+        const menuItems = await loadAllMenuItemsFromDb();
+        res.json(menuItems);
+    } catch (error) {
+        console.error('Error loading admin menu:', error);
         res.status(500).json({ error: 'Failed to load menu' });
     }
 });
@@ -2471,7 +2556,7 @@ app.use('/api/menu', menuApiRouter);
 app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
     try {
         const dishId = req.params.id;
-        const { name, name_ru, name_th, price } = req.body || {};
+        const { name, name_ru, name_th, price, is_public } = req.body || {};
 
         if (!name || price === undefined || price === null) {
             return res.status(400).json({ error: 'Name and price are required' });
@@ -2482,10 +2567,12 @@ app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
             return res.status(400).json({ error: 'Invalid price' });
         }
 
-        const result = await updateMenuItemRecord(dishId, { name, name_ru, name_th, price: priceNum });
+        const updates = { name, name_ru, name_th, price: priceNum };
+        if (typeof is_public === 'boolean') updates.is_public = is_public;
+
+        const result = await updateMenuItemRecord(dishId, updates);
         
         if (result.success) {
-            // Clear menu cache when menu is updated
             clearMenuCache();
             res.json({ success: true });
         } else {
@@ -2497,16 +2584,60 @@ app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
     }
 });
 
+// PATCH /api/menu/:id/visibility - Toggle is_public (admin only)
+app.patch('/api/menu/:id/visibility', verifyAdminToken, async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        const { is_public } = req.body || {};
+        if (typeof is_public !== 'boolean') {
+            return res.status(400).json({ error: 'is_public (boolean) is required' });
+        }
+        const result = await updateMenuItemRecord(dishId, { is_public });
+        if (result.success) {
+            clearMenuCache();
+            res.json({ success: true, is_public });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (error) {
+        console.error('Error updating visibility:', error);
+        res.status(500).json({ error: 'Failed to update visibility' });
+    }
+});
+
 // Serve menu images statically
 app.use('/api/menu-images', express.static(MENU_IMAGES_DIR));
 
 // Serve static files from the parent directory (AFTER all API routes)
 app.use(express.static(path.join(__dirname, '..')));
 
+// Loyverse sync: run twice daily (every 12 hours). First run 30s after startup.
+const LOYVERSE_SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+function scheduleLoyverseSync() {
+    const token = process.env.LOYVERSE_API_TOKEN;
+    if (!token) {
+        console.log('Loyverse sync disabled: LOYVERSE_API_TOKEN not set');
+        return;
+    }
+    const runSync = () => {
+        loyverseSync.syncLoyverseReceipts(db, token)
+            .then(r => {
+                if (r.fetched > 0 || r.inserted > 0 || r.errors.length > 0) {
+                    console.log(`Loyverse sync: fetched=${r.fetched} inserted=${r.inserted} skipped=${r.skipped}` + (r.errors.length ? ` errors=${r.errors.length}` : ''));
+                }
+                if (r.errors.length) r.errors.forEach(e => console.error('Loyverse sync:', e));
+            })
+            .catch(err => console.error('Loyverse sync failed:', err));
+    };
+    setTimeout(runSync, 30 * 1000); // first run 30s after start
+    setInterval(runSync, LOYVERSE_SYNC_INTERVAL_MS);
+}
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend server running on http://0.0.0.0:${PORT}`);
     startTelegramPolling();
+    scheduleLoyverseSync();
     // Parse menu on startup
     loadMenuItemsFromDb()
         .then(items => {
