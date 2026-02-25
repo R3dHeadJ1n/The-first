@@ -2341,7 +2341,7 @@ app.post('/book-room', async (req, res) => {
 // MENU MANAGEMENT FUNCTIONS
 // ============================
 
-// Load menu items from database
+// Load menu items from database (public only — for menu.html)
 async function loadMenuItemsFromDb() {
     try {
         const result = await db.query(
@@ -2365,14 +2365,62 @@ async function loadMenuItemsFromDb() {
     }
 }
 
+// Load ALL menu items (no is_public filter) — for admin only
+async function loadAllMenuItemsFromDb() {
+    try {
+        const result = await db.query(
+            `SELECT dish_id, category, name, name_ru, name_th, price, image_path, is_public
+             FROM menu_items
+             ORDER BY display_order, id`
+        );
+        return result.rows.map(row => ({
+            id: row.dish_id,
+            category: row.category,
+            name: row.name,
+            name_ru: row.name_ru || null,
+            name_th: row.name_th || null,
+            price: row.price,
+            image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null,
+            is_public: row.is_public !== false
+        }));
+    } catch (error) {
+        console.error('Error loading all menu items:', error);
+        return [];
+    }
+}
+
 async function updateMenuItemRecord(dishId, updates) {
     try {
-        const { name, name_ru, name_th, price } = updates;
+        const { name, name_ru, name_th, price, is_public } = updates;
+        const sets = [];
+        const values = [dishId];
+        let idx = 2;
+        if (name !== undefined) {
+            sets.push(`name = $${idx++}`);
+            values.push(name || '');
+        }
+        if (name_ru !== undefined) {
+            sets.push(`name_ru = $${idx++}`);
+            values.push(name_ru || null);
+        }
+        if (name_th !== undefined) {
+            sets.push(`name_th = $${idx++}`);
+            values.push(name_th || null);
+        }
+        if (price !== undefined) {
+            sets.push(`price = $${idx++}`);
+            values.push(price);
+        }
+        if (is_public !== undefined) {
+            sets.push(`is_public = $${idx++}`);
+            values.push(!!is_public);
+        }
+        if (sets.length === 0) {
+            return { success: false, error: 'No updates provided' };
+        }
         const result = await db.query(
-            `UPDATE menu_items
-             SET name = $2, name_ru = $3, name_th = $4, price = $5
-             WHERE dish_id = $1`,
-            [dishId, name || '', name_ru || null, name_th || null, price]
+            `UPDATE menu_items SET ${sets.join(', ')} WHERE dish_id = $1`,
+            values
         );
         if (result.rowCount === 0) {
             return { success: false, error: 'Dish not found' };
@@ -2417,6 +2465,17 @@ app.get('/api/menu', async (req, res) => {
         res.json(menuItems);
     } catch (error) {
         console.error('Error getting menu:', error);
+        res.status(500).json({ error: 'Failed to load menu' });
+    }
+});
+
+// GET /api/admin/menu - All menu items including non-public (admin only)
+app.get('/api/admin/menu', verifyAdminToken, async (req, res) => {
+    try {
+        const menuItems = await loadAllMenuItemsFromDb();
+        res.json(menuItems);
+    } catch (error) {
+        console.error('Error loading admin menu:', error);
         res.status(500).json({ error: 'Failed to load menu' });
     }
 });
@@ -2497,7 +2556,7 @@ app.use('/api/menu', menuApiRouter);
 app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
     try {
         const dishId = req.params.id;
-        const { name, name_ru, name_th, price } = req.body || {};
+        const { name, name_ru, name_th, price, is_public } = req.body || {};
 
         if (!name || price === undefined || price === null) {
             return res.status(400).json({ error: 'Name and price are required' });
@@ -2508,10 +2567,12 @@ app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
             return res.status(400).json({ error: 'Invalid price' });
         }
 
-        const result = await updateMenuItemRecord(dishId, { name, name_ru, name_th, price: priceNum });
+        const updates = { name, name_ru, name_th, price: priceNum };
+        if (typeof is_public === 'boolean') updates.is_public = is_public;
+
+        const result = await updateMenuItemRecord(dishId, updates);
         
         if (result.success) {
-            // Clear menu cache when menu is updated
             clearMenuCache();
             res.json({ success: true });
         } else {
@@ -2520,6 +2581,27 @@ app.put('/api/menu/:id', verifyAdminToken, async (req, res) => {
     } catch (error) {
         console.error('Error updating menu item:', error);
         res.status(500).json({ error: 'Failed to update menu item' });
+    }
+});
+
+// PATCH /api/menu/:id/visibility - Toggle is_public (admin only)
+app.patch('/api/menu/:id/visibility', verifyAdminToken, async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        const { is_public } = req.body || {};
+        if (typeof is_public !== 'boolean') {
+            return res.status(400).json({ error: 'is_public (boolean) is required' });
+        }
+        const result = await updateMenuItemRecord(dishId, { is_public });
+        if (result.success) {
+            clearMenuCache();
+            res.json({ success: true, is_public });
+        } else {
+            res.status(400).json({ error: result.error });
+        }
+    } catch (error) {
+        console.error('Error updating visibility:', error);
+        res.status(500).json({ error: 'Failed to update visibility' });
     }
 });
 

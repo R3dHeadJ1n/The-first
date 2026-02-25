@@ -180,6 +180,44 @@
             padding: 40px;
             color: #666;
         }
+
+        .visibility-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .visibility-toggle label {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .visibility-toggle input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #4CAF50;
+        }
+        .menu-item-card.hidden-from-public {
+            opacity: 0.85;
+            border: 2px dashed #999;
+        }
+        .visibility-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #e0e0e0;
+            color: #666;
+        }
+        .visibility-badge.visible {
+            background: #d4edda;
+            color: #155724;
+        }
+        .visibility-badge.hidden {
+            background: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -226,10 +264,12 @@ async function initBackend() {
             }, 3000);
         }
 
-        // Load menu items
+        // Load menu items (admin: all items including non-public)
         async function loadMenu() {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/menu`);
+                const response = await fetch(`${BACKEND_URL}/api/admin/menu`, {
+                    headers: window.getAdminAuthHeaders()
+                });
                 if (!response.ok) {
                     throw new Error('Failed to load menu');
                 }
@@ -238,7 +278,7 @@ async function initBackend() {
             } catch (error) {
                 console.error('Error loading menu:', error);
                 document.getElementById('menuContainer').innerHTML = 
-                    '<div class="loading">Error loading menu. Make sure backend is running.</div>';
+                    '<div class="loading">Error loading menu. Make sure backend is running and you are logged in.</div>';
             }
         }
 
@@ -251,39 +291,84 @@ async function initBackend() {
             }
 
             container.innerHTML = '<div class="menu-grid">' +
-                menuItems.map(item => `
-                    <div class="menu-item-card" data-id="${item.id}">
+                menuItems.map(item => {
+                    const isPublic = item.is_public !== false;
+                    const cardClass = isPublic ? '' : ' hidden-from-public';
+                    const safeId = escapeHtml(item.id).replace(/'/g, "\\'");
+                    return `
+                    <div class="menu-item-card${cardClass}" data-id="${escapeHtml(item.id)}">
                         <div class="menu-item-image">
                             ${item.image 
                                 ? `<img src="${BACKEND_URL}${item.image}" alt="${item.name}" onerror="this.parentElement.innerHTML='No Image'">`
                                 : 'No Image'}
                         </div>
                         <div class="menu-item-form">
+                            <div class="visibility-toggle">
+                                <input type="checkbox" id="vis-${escapeHtml(item.id)}" ${isPublic ? 'checked' : ''} 
+                                    onchange="toggleVisibility('${safeId}', this.checked)" aria-label="Visible on public menu">
+                                <label for="vis-${escapeHtml(item.id)}">Visible on public menu</label>
+                                <span class="visibility-badge ${isPublic ? 'visible' : 'hidden'}">${isPublic ? 'Visible' : 'Hidden'}</span>
+                            </div>
                             <div class="form-group">
                                 <label>Dish Name (EN)</label>
-                                <input type="text" class="dish-name" value="${escapeHtml(item.name)}" data-id="${item.id}" placeholder="English">
+                                <input type="text" class="dish-name" value="${escapeHtml(item.name)}" data-id="${escapeHtml(item.id)}" placeholder="English">
                             </div>
                             <div class="form-group">
                                 <label>Dish Name (RU)</label>
-                                <input type="text" class="dish-name-ru" value="${escapeHtml(item.name_ru || '')}" data-id="${item.id}" placeholder="Russian">
+                                <input type="text" class="dish-name-ru" value="${escapeHtml(item.name_ru || '')}" data-id="${escapeHtml(item.id)}" placeholder="Russian">
                             </div>
                             <div class="form-group">
                                 <label>Dish Name (TH)</label>
-                                <input type="text" class="dish-name-th" value="${escapeHtml(item.name_th || '')}" data-id="${item.id}" placeholder="Thai">
+                                <input type="text" class="dish-name-th" value="${escapeHtml(item.name_th || '')}" data-id="${escapeHtml(item.id)}" placeholder="Thai">
                             </div>
                             <div class="form-group">
                                 <label>Price</label>
-                                <input type="number" step="0.01" class="dish-price" value="${item.price}" data-id="${item.id}">
+                                <input type="number" step="0.01" class="dish-price" value="${item.price}" data-id="${escapeHtml(item.id)}">
                             </div>
                             <div class="image-upload">
-                                <input type="file" accept="image/jpeg,image/jpg,image/png" class="image-input" data-id="${item.id}" id="image-${item.id}">
-                                <label for="image-${item.id}" class="image-upload-label">Upload Image</label>
+                                <input type="file" accept="image/jpeg,image/jpg,image/png" class="image-input" data-id="${escapeHtml(item.id)}" id="image-${escapeHtml(item.id)}">
+                                <label for="image-${escapeHtml(item.id)}" class="image-upload-label">Upload Image</label>
                             </div>
-                            <button class="btn save-btn" onclick="saveItem('${item.id}')">Save Changes</button>
-                            <button class="btn btn-danger save-btn" onclick="deleteItem('${item.id}', '${String(item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Remove Dish</button>
+                            <button class="btn save-btn" onclick="saveItem('${safeId}')">Save Changes</button>
+                            <button class="btn btn-danger save-btn" onclick="deleteItem('${safeId}', '${String(item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Remove Dish</button>
                         </div>
                     </div>
-                `).join('') + '</div>';
+                `}).join('') + '</div>';
+        }
+
+        // Toggle public visibility for one item
+        async function toggleVisibility(dishId, isPublic) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/menu/${encodeURIComponent(dishId)}/visibility`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...window.getAdminAuthHeaders()
+                    },
+                    body: JSON.stringify({ is_public: isPublic })
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'Failed to update visibility');
+                }
+                const card = document.querySelector(`.menu-item-card[data-id="${dishId}"]`);
+                if (card) {
+                    card.classList.toggle('hidden-from-public', !isPublic);
+                    const badge = card.querySelector('.visibility-badge');
+                    if (badge) {
+                        badge.textContent = isPublic ? 'Visible' : 'Hidden';
+                        badge.classList.toggle('visible', isPublic);
+                        badge.classList.toggle('hidden', !isPublic);
+                    }
+                }
+                const item = menuItems.find(m => m.id === dishId);
+                if (item) item.is_public = isPublic;
+                showMessage(isPublic ? 'Item is now visible on public menu' : 'Item is now hidden from public menu', 'success');
+            } catch (error) {
+                console.error('Error toggling visibility:', error);
+                showMessage('Error: ' + error.message, 'error');
+                await loadMenu();
+            }
         }
 
         // Escape HTML
@@ -326,11 +411,13 @@ async function initBackend() {
             const nameThInput = card.querySelector('.dish-name-th');
             const priceInput = card.querySelector('.dish-price');
             const imageInput = card.querySelector('.image-input');
+            const visibilityCheckbox = card.querySelector('.visibility-toggle input[type="checkbox"]');
 
             const name = nameInput?.value?.trim() || '';
             const name_ru = nameRuInput?.value?.trim() || null;
             const name_th = nameThInput?.value?.trim() || null;
             const price = parseFloat(priceInput?.value);
+            const is_public = visibilityCheckbox ? visibilityCheckbox.checked : true;
 
             if (!name) {
                 showMessage('Dish name is required', 'error');
@@ -343,13 +430,13 @@ async function initBackend() {
             }
 
             try {
-                const updateResponse = await fetch(`${BACKEND_URL}/api/menu/${dishId}`, {
+                const updateResponse = await fetch(`${BACKEND_URL}/api/menu/${encodeURIComponent(dishId)}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                         ...window.getAdminAuthHeaders()
                     },
-                    body: JSON.stringify({ name, name_ru: name_ru || undefined, name_th: name_th || undefined, price })
+                    body: JSON.stringify({ name, name_ru: name_ru || undefined, name_th: name_th || undefined, price, is_public })
                 });
 
                 if (!updateResponse.ok) {
