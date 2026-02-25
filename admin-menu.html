@@ -223,6 +223,44 @@
             padding-top: 8px;
             border-top: 1px solid #eee;
         }
+        .extras-group-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 8px 10px;
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            user-select: none;
+        }
+        .extras-group-toggle:hover {
+            background: #eee;
+        }
+        .extras-group-toggle .extras-arrow {
+            margin-left: 8px;
+            transition: transform 0.2s ease;
+        }
+        .extras-group.open .extras-group-toggle .extras-arrow {
+            transform: rotate(180deg);
+        }
+        .extras-group-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+        }
+        .extras-group.open .extras-group-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .extras-group-list-inner {
+            padding: 10px 0 4px 0;
+        }
         .extras-group label.form-label {
             font-weight: bold;
             color: #333;
@@ -323,16 +361,25 @@ async function initBackend() {
                     const isExtrasCategory = (item.category || '').toUpperCase() === 'EXTRAS';
                     let extrasHtml = '';
                     if (!isExtrasCategory && extrasItems.length > 0) {
+                        const selectedCount = availableExtraIds.length;
+                        const totalCount = extrasItems.length;
                         extrasHtml = `
-                            <div class="extras-group form-group">
-                                <label class="form-label">Available extras for this dish</label>
-                                ${extrasItems.map(ex => `
-                                    <div class="extra-checkbox">
-                                        <input type="checkbox" class="extra-cb" data-extra-id="${escapeHtml(ex.id)}" data-dish-id="${escapeHtml(item.id)}"
-                                            ${availableExtraIds.includes(ex.id) ? 'checked' : ''}>
-                                        <span>${escapeHtml(ex.name)} (${Number(ex.price || 0).toFixed(0)} THB)</span>
+                            <div class="extras-group form-group" data-extras-dish-id="${escapeHtml(item.id)}">
+                                <button type="button" class="extras-group-toggle" onclick="toggleExtrasGroup(this)">
+                                    <span class="extras-summary">Available extras (${selectedCount}/${totalCount} selected)</span>
+                                    <span class="extras-arrow">▼</span>
+                                </button>
+                                <div class="extras-group-list">
+                                    <div class="extras-group-list-inner">
+                                        ${extrasItems.map(ex => `
+                                            <div class="extra-checkbox">
+                                                <input type="checkbox" class="extra-cb" data-extra-id="${escapeHtml(ex.id)}" data-dish-id="${escapeHtml(item.id)}"
+                                                    ${availableExtraIds.includes(ex.id) ? 'checked' : ''} onchange="updateExtrasSummary(this)">
+                                                <span>${escapeHtml(ex.name)} (${Number(ex.price || 0).toFixed(0)} THB)</span>
+                                            </div>
+                                        `).join('')}
                                     </div>
-                                `).join('')}
+                                </div>
                             </div>`;
                     }
                     return `
@@ -417,6 +464,20 @@ async function initBackend() {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function toggleExtrasGroup(btn) {
+            const group = btn.closest('.extras-group');
+            if (group) group.classList.toggle('open');
+        }
+
+        function updateExtrasSummary(checkbox) {
+            const group = checkbox.closest('.extras-group');
+            if (!group) return;
+            const total = group.querySelectorAll('.extra-cb').length;
+            const selected = group.querySelectorAll('.extra-cb:checked').length;
+            const summary = group.querySelector('.extras-summary');
+            if (summary) summary.textContent = `Available extras (${selected}/${total} selected)`;
         }
 
         // Delete dish

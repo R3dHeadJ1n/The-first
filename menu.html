@@ -644,8 +644,7 @@
             </div>
             <div class="extras-modal-body" id="extrasModalBody"></div>
             <div class="extras-modal-footer">
-                <button type="button" class="btn extras-btn-without" id="extrasAddWithoutBtn">Add without extras</button>
-                <button type="button" class="btn extras-btn-add" id="extrasAddToCartBtn">Add to cart</button>
+                <button type="button" class="btn extras-btn-without" id="extrasAddBtn">Add without extras</button>
             </div>
         </div>
     </div>
@@ -941,6 +940,7 @@ async function initBackend() {
             item.available_extras.forEach(ex => { extrasModalState.extraQtys[ex.id] = 0; });
             document.getElementById('extrasModalTitle').textContent = getDishDisplayName(item) + ' — Add extras';
             renderExtrasModalBody();
+            updateExtrasAddButton();
             document.getElementById('extrasModal').classList.add('show');
         }
         
@@ -954,6 +954,7 @@ async function initBackend() {
             const q = Math.max(0, (extrasModalState.extraQtys[extraId] || 0) + delta);
             extrasModalState.extraQtys[extraId] = q;
             renderExtrasModalBody();
+            updateExtrasAddButton();
         }
         
         function renderExtrasModalBody() {
@@ -1001,6 +1002,25 @@ async function initBackend() {
             });
             addToCart(item.id, getDishDisplayName(item), item.price, extras);
             closeExtrasModal();
+        }
+        
+        function hasAnyExtrasSelected() {
+            if (!extrasModalState) return false;
+            return Object.values(extrasModalState.extraQtys || {}).some(q => q > 0);
+        }
+        
+        function updateExtrasAddButton() {
+            const btn = document.getElementById('extrasAddBtn');
+            if (!btn) return;
+            if (hasAnyExtrasSelected()) {
+                btn.textContent = 'Add to cart';
+                btn.classList.remove('extras-btn-without');
+                btn.classList.add('extras-btn-add');
+            } else {
+                btn.textContent = 'Add without extras';
+                btn.classList.add('extras-btn-without');
+                btn.classList.remove('extras-btn-add');
+            }
         }
         
         function updateCartDisplay() {
@@ -1519,10 +1539,13 @@ async function initBackend() {
                         if (e.target === extrasModalEl) closeExtrasModal();
                     });
                 }
-                const extrasAddWithoutBtn = document.getElementById('extrasAddWithoutBtn');
-                if (extrasAddWithoutBtn) extrasAddWithoutBtn.addEventListener('click', extrasAddWithout);
-                const extrasAddToCartBtn = document.getElementById('extrasAddToCartBtn');
-                if (extrasAddToCartBtn) extrasAddToCartBtn.addEventListener('click', extrasAddToCart);
+                const extrasAddBtn = document.getElementById('extrasAddBtn');
+                if (extrasAddBtn) {
+                    extrasAddBtn.addEventListener('click', function() {
+                        if (hasAnyExtrasSelected()) extrasAddToCart();
+                        else extrasAddWithout();
+                    });
+                }
                 
                 // Setup clear cart button in cart modal
                 const cartModalClearBtn = document.getElementById('cartModalClearBtn');
