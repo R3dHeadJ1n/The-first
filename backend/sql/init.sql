@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     dish_id TEXT NOT NULL,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     price INTEGER NOT NULL CHECK (price >= 0),
-    subtotal INTEGER GENERATED ALWAYS AS (quantity * price) STORED
+    subtotal INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
@@ -65,3 +65,4 @@ CREATE TABLE IF NOT EXISTS menu_items (
 
 CREATE INDEX IF NOT EXISTS idx_menu_items_sku ON menu_items(sku) WHERE sku IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_menu_items_dish_id ON menu_items(dish_id);
+CREATE INDEX IF NOT EXISTS idx_menu_items_is_public ON menu_items(is_public) WHERE is_public = true;
