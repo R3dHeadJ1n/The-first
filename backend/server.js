@@ -2365,7 +2365,7 @@ async function loadMenuItemsFromDb() {
     }
 }
 
-// Load ALL menu items (no is_public filter) — for admin only
+// Load ALL menu items (no is_public filter) — for admin onlyy
 async function loadAllMenuItemsFromDb() {
     try {
         const result = await db.query(
