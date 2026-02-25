@@ -440,7 +440,7 @@
             const headers = window.getAdminAuthHeaders ? window.getAdminAuthHeaders() : {};
             const [ordersRes, menuRes] = await Promise.all([
                 fetch(`${BACKEND_URL}/admin/orders/all?includeDeleted=true`, { headers }),
-                fetch(`${BACKEND_URL}/api/menu`, { headers })
+                fetch(`${BACKEND_URL}/api/admin/menu`, { headers })
             ]);
             if (!ordersRes.ok) throw new Error('Failed to load orders');
             if (!menuRes.ok) throw new Error('Failed to load menu');
