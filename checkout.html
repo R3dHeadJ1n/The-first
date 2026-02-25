@@ -275,10 +275,26 @@ async function initBackend() {
         function getCart() {
             try {
                 const cartJson = localStorage.getItem(CART_STORAGE_KEY);
-                return cartJson ? JSON.parse(cartJson) : {};
+                if (!cartJson) return [];
+                const parsed = JSON.parse(cartJson);
+                if (Array.isArray(parsed)) return parsed;
+                const arr = [];
+                for (const dishId in parsed) {
+                    const item = parsed[dishId];
+                    if (item && item.name != null && typeof item.price === 'number' && item.quantity > 0) {
+                        arr.push({ id: dishId, dishId, name: item.name, price: item.price, quantity: item.quantity, extras: [] });
+                    }
+                }
+                return arr;
             } catch (e) {
-                return {};
+                return [];
             }
+        }
+
+        function cartEntryTotal(entry) {
+            let t = (entry.price || 0) * (entry.quantity || 0);
+            (entry.extras || []).forEach(ex => { t += (ex.price || 0) * (ex.quantity || 0); });
+            return t;
         }
 
         function renderOrderSummary() {
@@ -287,8 +303,7 @@ async function initBackend() {
             const contentEl = document.getElementById('checkoutContent');
             const emptyEl = document.getElementById('checkoutEmpty');
 
-            const itemCount = Object.keys(cart).length;
-            if (itemCount === 0) {
+            if (cart.length === 0) {
                 contentEl.style.display = 'none';
                 emptyEl.style.display = 'block';
                 return;
@@ -299,12 +314,13 @@ async function initBackend() {
 
             let html = '<div class="checkout-order-summary-title">' + t('your_order') + '</div>';
             let total = 0;
-            for (const dishId in cart) {
-                const item = cart[dishId];
-                if (!item || !item.name) continue;
-                const itemTotal = item.price * item.quantity;
+            for (const entry of cart) {
+                const itemTotal = cartEntryTotal(entry);
                 total += itemTotal;
-                html += `<div class="checkout-order-item"><span>${item.name} x${item.quantity}</span><span>${itemTotal.toFixed(2)} THB</span></div>`;
+                const lineLabel = entry.extras && entry.extras.length > 0
+                    ? entry.name + ' x' + entry.quantity + ' + ' + entry.extras.map(ex => ex.name + ' x' + ex.quantity).join(', ')
+                    : entry.name + ' x' + entry.quantity;
+                html += `<div class="checkout-order-item"><span>${lineLabel}</span><span>${itemTotal.toFixed(2)} THB</span></div>`;
             }
             html += `<div class="checkout-order-total">${t('total')}: ${total.toFixed(2)} THB</div>`;
             summaryEl.innerHTML = html;
@@ -312,7 +328,7 @@ async function initBackend() {
 
         async function submitOrder() {
             const cart = getCart();
-            if (Object.keys(cart).length === 0) {
+            if (cart.length === 0) {
                 alert(t('alert_cart_empty'));
                 return;
             }
@@ -326,9 +342,11 @@ async function initBackend() {
             }
 
             const items = [];
-            for (const dishId in cart) {
-                const item = cart[dishId];
-                items.push({ dish_id: dishId, quantity: item.quantity, price: item.price });
+            for (const entry of cart) {
+                items.push({ dish_id: entry.dishId, quantity: entry.quantity, price: entry.price });
+                (entry.extras || []).forEach(ex => {
+                    items.push({ dish_id: ex.dishId, quantity: ex.quantity, price: ex.price });
+                });
             }
 
             const submitBtn = document.getElementById('checkoutSubmit');

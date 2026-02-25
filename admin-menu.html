@@ -218,6 +218,29 @@
             background: #f8d7da;
             color: #721c24;
         }
+        .extras-group {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+        .extras-group label.form-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .extras-group .extra-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+        .extras-group .extra-checkbox input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -289,12 +312,29 @@ async function initBackend() {
                 container.innerHTML = '<div class="loading">No menu items found</div>';
                 return;
             }
+            const extrasItems = menuItems.filter(m => (m.category || '').toUpperCase() === 'EXTRAS');
 
             container.innerHTML = '<div class="menu-grid">' +
                 menuItems.map(item => {
                     const isPublic = item.is_public !== false;
                     const cardClass = isPublic ? '' : ' hidden-from-public';
                     const safeId = escapeHtml(item.id).replace(/'/g, "\\'");
+                    const availableExtraIds = (item.available_extras || []).map(e => e.id);
+                    const isExtrasCategory = (item.category || '').toUpperCase() === 'EXTRAS';
+                    let extrasHtml = '';
+                    if (!isExtrasCategory && extrasItems.length > 0) {
+                        extrasHtml = `
+                            <div class="extras-group form-group">
+                                <label class="form-label">Available extras for this dish</label>
+                                ${extrasItems.map(ex => `
+                                    <div class="extra-checkbox">
+                                        <input type="checkbox" class="extra-cb" data-extra-id="${escapeHtml(ex.id)}" data-dish-id="${escapeHtml(item.id)}"
+                                            ${availableExtraIds.includes(ex.id) ? 'checked' : ''}>
+                                        <span>${escapeHtml(ex.name)} (${Number(ex.price || 0).toFixed(0)} THB)</span>
+                                    </div>
+                                `).join('')}
+                            </div>`;
+                    }
                     return `
                     <div class="menu-item-card${cardClass}" data-id="${escapeHtml(item.id)}">
                         <div class="menu-item-image">
@@ -325,6 +365,7 @@ async function initBackend() {
                                 <label>Price</label>
                                 <input type="number" step="0.01" class="dish-price" value="${item.price}" data-id="${escapeHtml(item.id)}">
                             </div>
+                            ${extrasHtml}
                             <div class="image-upload">
                                 <input type="file" accept="image/jpeg,image/jpg,image/png" class="image-input" data-id="${escapeHtml(item.id)}" id="image-${escapeHtml(item.id)}">
                                 <label for="image-${escapeHtml(item.id)}" class="image-upload-label">Upload Image</label>
@@ -442,6 +483,19 @@ async function initBackend() {
                 if (!updateResponse.ok) {
                     const errorData = await updateResponse.json().catch(() => ({ error: 'Update failed' }));
                     throw new Error(errorData.error || 'Failed to update item');
+                }
+
+                // Save extras for this dish (only for non-EXTRAS items)
+                const extrasCheckboxes = card.querySelectorAll('.extra-cb');
+                if (extrasCheckboxes.length > 0) {
+                    const extra_dish_ids = Array.from(extrasCheckboxes)
+                        .filter(cb => cb.checked)
+                        .map(cb => cb.getAttribute('data-extra-id'));
+                    await fetch(`${BACKEND_URL}/api/menu/${encodeURIComponent(dishId)}/extras`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', ...window.getAdminAuthHeaders() },
+                        body: JSON.stringify({ extra_dish_ids })
+                    });
                 }
 
                 // Upload image if selected

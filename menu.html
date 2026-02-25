@@ -478,6 +478,100 @@
             transform: translateY(0) scale(1.05);
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
         }
+
+        /* Extras modal (add-ons for a dish) */
+        .extras-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .extras-modal.show {
+            display: flex;
+            opacity: 1;
+        }
+        .extras-modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 480px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .extras-modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .extras-modal-header h2 { margin: 0; color: #991305; font-size: 20px; }
+        .extras-modal-body {
+            padding: 16px 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .extras-dish-summary {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            color: #333;
+        }
+        .extras-dish-summary .base-price { color: #991305; font-size: 14px; }
+        .extras-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .extras-option:last-of-type { border-bottom: none; }
+        .extras-option img { width: 50px; height: 50px; object-fit: cover; border-radius: 6px; }
+        .extras-option-info { flex: 1; }
+        .extras-option-name { font-weight: 600; color: #333; }
+        .extras-option-price { font-size: 13px; color: #991305; }
+        .extras-option-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .extras-option-controls button {
+            width: 36px;
+            height: 36px;
+            border: 2px solid #991305;
+            background: white;
+            color: #991305;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .extras-option-controls button:hover { background: #991305; color: white; }
+        .extras-option-qty { min-width: 28px; text-align: center; font-weight: 600; }
+        .extras-modal-footer {
+            padding: 16px 20px;
+            border-top: 2px solid #eee;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .extras-modal-footer .btn { flex: 1; min-width: 120px; padding: 12px; font-weight: 600; cursor: pointer; border-radius: 8px; border: none; }
+        .extras-btn-without { background: #6c757d; color: white; }
+        .extras-btn-without:hover { background: #5a6268; }
+        .extras-btn-add { background: #991305; color: white; }
+        .extras-btn-add:hover { background: #7a0f04; }
     </style>
 </head>
 <body>
@@ -537,6 +631,21 @@
                     <button class="cart-modal-clear-btn" id="cartModalClearBtn" data-i18n="clear_cart">Clear Cart</button>
                     <button class="cart-modal-order-btn" id="cartModalOrderBtn" data-i18n="proceed_to_checkout">Proceed to checkout</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extras modal (add-ons for dish with extras) -->
+    <div class="extras-modal" id="extrasModal">
+        <div class="extras-modal-content">
+            <div class="extras-modal-header">
+                <h2 id="extrasModalTitle">Add extras</h2>
+                <button type="button" class="cart-modal-close" id="extrasModalClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="extras-modal-body" id="extrasModalBody"></div>
+            <div class="extras-modal-footer">
+                <button type="button" class="btn extras-btn-without" id="extrasAddWithoutBtn">Add without extras</button>
+                <button type="button" class="btn extras-btn-add" id="extrasAddToCartBtn">Add to cart</button>
             </div>
         </div>
     </div>
@@ -663,56 +772,133 @@ async function initBackend() {
             document.addEventListener('click', () => switcher?.classList.remove('open'));
         }
         
-        // Cart management
+        // Cart management — cart is array of { id, dishId, name, price, quantity, extras: [{ dishId, name, price, quantity }] }
         const CART_STORAGE_KEY = 'foodCart';
         
         function getCart() {
             try {
                 const cartJson = localStorage.getItem(CART_STORAGE_KEY);
-                return cartJson ? JSON.parse(cartJson) : {};
+                if (!cartJson) return [];
+                const parsed = JSON.parse(cartJson);
+                if (Array.isArray(parsed)) return parsed;
+                // Migrate old object format to array
+                const arr = [];
+                for (const dishId in parsed) {
+                    const item = parsed[dishId];
+                    if (item && item.name != null && typeof item.price === 'number' && item.quantity > 0) {
+                        arr.push({
+                            id: dishId,
+                            dishId,
+                            name: item.name,
+                            price: item.price,
+                            quantity: item.quantity,
+                            extras: []
+                        });
+                    }
+                }
+                saveCart(arr);
+                return arr;
             } catch (e) {
-                return {};
+                return [];
             }
         }
         
         function saveCart(cart) {
             try {
-                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(Array.isArray(cart) ? cart : []));
             } catch (e) {
                 console.error('Error saving cart:', e);
             }
         }
         
-        function addToCart(dishId, dishName, dishPrice) {
+        function cartEntryTotal(entry) {
+            let t = (entry.price || 0) * (entry.quantity || 0);
+            (entry.extras || []).forEach(ex => { t += (ex.price || 0) * (ex.quantity || 0); });
+            return t;
+        }
+        
+        function getCartTotal() {
+            return getCart().reduce((sum, entry) => sum + cartEntryTotal(entry), 0);
+        }
+        
+        function getCartItemCount() {
+            return getCart().reduce((sum, entry) => {
+                sum += entry.quantity || 0;
+                (entry.extras || []).forEach(ex => { sum += ex.quantity || 0; });
+                return sum;
+            }, 0);
+        }
+        
+        function addToCart(dishId, dishName, dishPrice, extras = []) {
             try {
                 const cart = getCart();
-                if (cart[dishId]) {
-                    cart[dishId].quantity += 1;
+                const hasExtras = extras && extras.length > 0;
+                if (!hasExtras) {
+                    const existing = cart.find(e => e.dishId === dishId && (!e.extras || e.extras.length === 0));
+                    if (existing) {
+                        existing.quantity = (existing.quantity || 0) + 1;
+                        saveCart(cart);
+                    } else {
+                        cart.push({
+                            id: dishId,
+                            dishId,
+                            name: dishName,
+                            price: dishPrice,
+                            quantity: 1,
+                            extras: []
+                        });
+                        saveCart(cart);
+                    }
                 } else {
-                    cart[dishId] = {
+                    cart.push({
+                        id: dishId + '-' + Date.now(),
+                        dishId,
                         name: dishName,
                         price: dishPrice,
-                        quantity: 1
-                    };
+                        quantity: 1,
+                        extras: extras.map(e => ({ dishId: e.id, name: e.name, price: e.price, quantity: e.quantity || 1 }))
+                    });
+                    saveCart(cart);
                 }
-                saveCart(cart);
-                
-                // Animate cart icon
                 const cartIconContainer = document.getElementById('cartIconContainer');
                 if (cartIconContainer) {
                     cartIconContainer.classList.add('just-added');
-                    setTimeout(() => {
-                        cartIconContainer.classList.remove('just-added');
-                    }, 500);
+                    setTimeout(() => cartIconContainer.classList.remove('just-added'), 500);
                 }
-                
-                // Update the menu item display
                 updateMenuItemDisplay(dishId);
-                
                 updateCartDisplay();
             } catch (e) {
                 console.error('Error adding to cart:', e);
             }
+        }
+        
+        function removeFromCart(cartEntryId) {
+            try {
+                let cart = getCart();
+                cart = cart.filter(e => e.id !== cartEntryId);
+                saveCart(cart);
+                const dishId = typeof cartEntryId === 'string' && cartEntryId.indexOf('-') > 0
+                    ? cartEntryId.split('-')[0] : cartEntryId;
+                updateMenuItemDisplay(dishId);
+                updateCartDisplay();
+            } catch (e) {
+                console.error('Error removing from cart:', e);
+            }
+        }
+        
+        function changeCartEntryQuantity(cartEntryId, delta) {
+            const cart = getCart();
+            const entry = cart.find(e => e.id === cartEntryId);
+            if (!entry) return;
+            const q = (entry.quantity || 0) + delta;
+            if (q <= 0) {
+                removeFromCart(cartEntryId);
+                return;
+            }
+            entry.quantity = q;
+            saveCart(cart);
+            updateMenuItemDisplay(entry.dishId);
+            updateCartDisplay();
         }
         
         function clearCart() {
@@ -725,33 +911,96 @@ async function initBackend() {
             }
         }
         
-        function removeFromCart(dishId) {
-            try {
-                const cart = getCart();
-                if (cart[dishId]) {
-                    cart[dishId].quantity -= 1;
-                    if (cart[dishId].quantity <= 0) {
-                        delete cart[dishId];
-                    }
-                    saveCart(cart);
-                    
-                    // Update the menu item display
-                    updateMenuItemDisplay(dishId);
-                    
-                    updateCartDisplay();
-                }
-            } catch (e) {
-                console.error('Error removing from cart:', e);
-            }
+        function getQuantityInCartForDish(dishId) {
+            return getCart().reduce((sum, e) => e.dishId === dishId ? sum + (e.quantity || 0) : sum, 0);
         }
         
-        function getCartTotal() {
+        function removeOneFromCartForDish(dishId) {
             const cart = getCart();
-            let total = 0;
-            for (const dishId in cart) {
-                total += cart[dishId].price * cart[dishId].quantity;
+            const entry = cart.find(e => e.dishId === dishId);
+            if (!entry) return;
+            if (entry.quantity > 1) {
+                entry.quantity--;
+                saveCart(cart);
+            } else {
+                removeFromCart(entry.id);
             }
-            return total;
+            updateMenuItemDisplay(dishId);
+            updateCartDisplay();
+        }
+        
+        // Extras modal state (dish with available_extras)
+        let extrasModalState = null;
+        
+        function openExtrasModal(item) {
+            if (!item || !item.available_extras || item.available_extras.length === 0) {
+                addToCart(item.id, getDishDisplayName(item), item.price, []);
+                return;
+            }
+            extrasModalState = { item, extraQtys: {} };
+            item.available_extras.forEach(ex => { extrasModalState.extraQtys[ex.id] = 0; });
+            document.getElementById('extrasModalTitle').textContent = getDishDisplayName(item) + ' — Add extras';
+            renderExtrasModalBody();
+            document.getElementById('extrasModal').classList.add('show');
+        }
+        
+        function closeExtrasModal() {
+            extrasModalState = null;
+            document.getElementById('extrasModal').classList.remove('show');
+        }
+        
+        function changeExtraQty(extraId, delta) {
+            if (!extrasModalState || extrasModalState.extraQtys[extraId] == null) return;
+            const q = Math.max(0, (extrasModalState.extraQtys[extraId] || 0) + delta);
+            extrasModalState.extraQtys[extraId] = q;
+            renderExtrasModalBody();
+        }
+        
+        function renderExtrasModalBody() {
+            const body = document.getElementById('extrasModalBody');
+            if (!body || !extrasModalState) return;
+            const item = extrasModalState.item;
+            const displayName = getDishDisplayName(item);
+            body.innerHTML = `
+                <div class="extras-dish-summary">${escapeHtml(displayName)} — <span class="base-price">${Number(item.price || 0).toFixed(2)} THB</span> base</div>
+                ${(item.available_extras || []).map(ex => {
+                    const qty = extrasModalState.extraQtys[ex.id] || 0;
+                    const name = getDishDisplayName(ex);
+                    const safeId = escapeHtml(ex.id).replace(/'/g, "\\'");
+                    return `
+                    <div class="extras-option">
+                        ${ex.image ? `<img src="${BACKEND_URL}${ex.image}" alt="">` : '<div style="width:50px;height:50px;background:#eee;border-radius:6px"></div>'}
+                        <div class="extras-option-info">
+                            <div class="extras-option-name">${escapeHtml(name)}</div>
+                            <div class="extras-option-price">${Number(ex.price || 0).toFixed(2)} THB</div>
+                        </div>
+                        <div class="extras-option-controls">
+                            <button type="button" onclick="window.changeExtraQty('${safeId}', -1)">−</button>
+                            <span class="extras-option-qty">${qty}</span>
+                            <button type="button" onclick="window.changeExtraQty('${safeId}', 1)">+</button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            `;
+        }
+        
+        function extrasAddWithout() {
+            if (!extrasModalState) return;
+            const item = extrasModalState.item;
+            addToCart(item.id, getDishDisplayName(item), item.price, []);
+            closeExtrasModal();
+        }
+        
+        function extrasAddToCart() {
+            if (!extrasModalState) return;
+            const item = extrasModalState.item;
+            const extras = [];
+            (item.available_extras || []).forEach(ex => {
+                const qty = extrasModalState.extraQtys[ex.id] || 0;
+                if (qty > 0) extras.push({ id: ex.id, name: getDishDisplayName(ex), price: ex.price, quantity: qty });
+            });
+            addToCart(item.id, getDishDisplayName(item), item.price, extras);
+            closeExtrasModal();
         }
         
         function updateCartDisplay() {
@@ -761,14 +1010,7 @@ async function initBackend() {
                 const floatingOrderBtn = document.getElementById('floatingOrderBtn');
                 const cartModal = document.getElementById('cartModal');
                 
-                // Calculate total item count (sum of all quantities)
-                let totalItems = 0;
-                for (const dishId in cart) {
-                    const item = cart[dishId];
-                    if (item && item.quantity) {
-                        totalItems += item.quantity;
-                    }
-                }
+                const totalItems = getCartItemCount();
                 
                 // Update cart badge
                 if (cartBadge) {
@@ -816,9 +1058,7 @@ async function initBackend() {
             
             if (!cartModalBody || !cartModalFooter) return;
             
-            const itemCount = Object.keys(cart).length;
-            
-            if (itemCount === 0) {
+            if (cart.length === 0) {
                 cartModalBody.innerHTML = '<div class="cart-modal-empty">Your cart is empty</div>';
                 cartModalFooter.style.display = 'none';
                 return;
@@ -829,31 +1069,27 @@ async function initBackend() {
             let html = '';
             let total = 0;
             
-            for (const dishId in cart) {
-                const item = cart[dishId];
-                if (!item || !item.name || typeof item.price !== 'number') {
-                    continue;
-                }
-                
-                const itemTotal = item.price * item.quantity;
-                total += itemTotal;
-                
-                const escapedName = escapeHtml(item.name);
-                const escapedId = escapeHtml(dishId);
-                const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            for (const entry of cart) {
+                const entryTotal = cartEntryTotal(entry);
+                total += entryTotal;
+                const escapedId = escapeHtml(entry.id);
+                const lineLabel = entry.extras && entry.extras.length > 0
+                    ? escapeHtml(entry.name) + ' x' + entry.quantity + ' + ' + entry.extras.map(ex => ex.name + ' x' + ex.quantity).join(', ')
+                    : escapeHtml(entry.name) + ' x' + entry.quantity;
                 
                 html += `
                     <div class="cart-modal-item">
                         <div class="cart-modal-item-info">
-                            <div class="cart-modal-item-name">${escapedName}</div>
-                            <div class="cart-modal-item-price">${item.price.toFixed(2)} THB each</div>
+                            <div class="cart-modal-item-name">${lineLabel}</div>
+                            <div class="cart-modal-item-price">${entryTotal.toFixed(2)} THB</div>
                         </div>
                         <div class="cart-modal-item-controls">
-                            <button onclick="window.removeFromCart('${escapedId}')" class="cart-modal-btn-minus">-</button>
-                            <span class="cart-modal-item-quantity">${item.quantity}</span>
-                            <button onclick="window.addToCart('${escapedId}', '${escapedNameForOnclick}', ${item.price})" class="cart-modal-btn-plus">+</button>
+                            <button onclick="window.changeCartEntryQuantity('${escapedId.replace(/'/g, "\\'")}', -1)" class="cart-modal-btn-minus">-</button>
+                            <span class="cart-modal-item-quantity">${entry.quantity}</span>
+                            <button onclick="window.changeCartEntryQuantity('${escapedId.replace(/'/g, "\\'")}', 1)" class="cart-modal-btn-plus">+</button>
                         </div>
-                        <div class="cart-modal-item-total">${itemTotal.toFixed(2)} THB</div>
+                        <div class="cart-modal-item-total">${entryTotal.toFixed(2)} THB</div>
+                        <button type="button" class="cart-modal-btn-minus" style="margin-left:8px" onclick="window.removeFromCart('${escapedId.replace(/'/g, "\\'")}')" title="Remove">×</button>
                     </div>
                 `;
             }
@@ -867,15 +1103,8 @@ async function initBackend() {
         // Function to update all menu item displays (when cart changes from modal)
         function updateAllMenuItems() {
             const cart = getCart();
-            for (const dishId in cart) {
-                updateMenuItemDisplay(dishId);
-            }
-            // Also update items that might have been removed
             menuItems.forEach(item => {
-                const dishId = String(item.id);
-                if (!cart[dishId]) {
-                    updateMenuItemDisplay(dishId);
-                }
+                updateMenuItemDisplay(String(item.id));
             });
         }
         
@@ -1024,21 +1253,25 @@ async function initBackend() {
                         const escapedName = escapeHtml(displayName);
                         const escapedId = escapeHtml(String(item.id));
                         const escapedNameForOnclick = escapedName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                        const cartItem = cart[escapedId];
-                        const quantity = cartItem ? cartItem.quantity : 0;
+                        const quantity = getQuantityInCartForDish(String(item.id));
                         let buttonHtml = '';
                         if (quantity > 0) {
                             buttonHtml = `
                                 <div class="menu-item-quantity-controls" data-item-id="${escapedId}">
-                                    <button class="menu-item-qty-btn" onclick="window.removeFromCart('${escapedId}')">-</button>
+                                    <button class="menu-item-qty-btn" onclick="window.removeOneFromCartForDish('${escapedId}')">-</button>
                                     <span class="menu-item-qty-display">${quantity}</span>
                                     <button class="menu-item-qty-btn" onclick="window.addToCart('${escapedId}', '${escapedNameForOnclick}', ${item.price})">+</button>
                                 </div>
                             `;
                         } else {
-                            buttonHtml = `
+                            const hasExtras = item.available_extras && item.available_extras.length > 0;
+                            if (hasExtras) {
+                                buttonHtml = `<button class="btn btn-food menu-add-btn" onclick="window._openExtrasModalForId('${escapedId}')">${t('add_to_cart')}</button>`;
+                            } else {
+                                buttonHtml = `
                                 <button class="btn btn-food menu-add-btn" onclick="window.addToCart('${escapedId}', '${escapedNameForOnclick}', ${item.price})">${t('add_to_cart')}</button>
                             `;
+                            }
                         }
                         html += `
                             <div class="menu-item-card" data-item-id="${escapedId}">
@@ -1072,9 +1305,7 @@ async function initBackend() {
             const menuItemCard = document.querySelector(`.menu-item-card[data-item-id="${dishId}"]`);
             if (!menuItemCard) return;
             
-            const cart = getCart();
-            const cartItem = cart[dishId];
-            const quantity = cartItem ? cartItem.quantity : 0;
+            const quantity = getQuantityInCartForDish(dishId);
             
             const menuItemInfo = menuItemCard.querySelector('.menu-item-info');
             if (!menuItemInfo) return;
@@ -1103,16 +1334,17 @@ async function initBackend() {
             if (quantity > 0) {
                 const controlsHtml = `
                     <div class="menu-item-quantity-controls" data-item-id="${dishId}">
-                        <button class="menu-item-qty-btn" onclick="window.removeFromCart('${dishId}')">-</button>
+                        <button class="menu-item-qty-btn" onclick="window.removeOneFromCartForDish('${dishId}')">-</button>
                         <span class="menu-item-qty-display">${quantity}</span>
                         <button class="menu-item-qty-btn" onclick="window.addToCart('${dishId}', '${escapedNameForOnclick}', ${menuItem.price})">+</button>
                     </div>
                 `;
                 menuItemInfo.insertAdjacentHTML('beforeend', controlsHtml);
             } else {
-                const buttonHtml = `
-                    <button class="btn btn-food menu-add-btn" onclick="window.addToCart('${dishId}', '${escapedNameForOnclick}', ${menuItem.price})">${t('add_to_cart')}</button>
-                `;
+                const hasExtras = menuItem.available_extras && menuItem.available_extras.length > 0;
+                const buttonHtml = hasExtras
+                    ? `<button class="btn btn-food menu-add-btn" onclick="window._openExtrasModalForId('${dishId}')">${t('add_to_cart')}</button>`
+                    : `<button class="btn btn-food menu-add-btn" onclick="window.addToCart('${dishId}', '${escapedNameForOnclick}', ${menuItem.price})">${t('add_to_cart')}</button>`;
                 menuItemInfo.insertAdjacentHTML('beforeend', buttonHtml);
             }
         }
@@ -1120,20 +1352,19 @@ async function initBackend() {
         // WhatsApp integration with cart
         async function openWhatsAppOrder() {
             const cart = getCart();
-            const itemCount = Object.keys(cart).length;
-            
-            if (itemCount === 0) {
+            if (cart.length === 0) {
                 const warningMsgs = { en: 'Your cart is empty. Please add items to your cart.', ru: 'Ваша корзина пуста. Пожалуйста, добавьте блюда в корзину.', th: 'ตะกร้าของคุณว่างเปล่า กรุณาเพิ่มรายการในตะกร้า' };
                 const warningMsg = warningMsgs[currentLang] || warningMsgs.en;
                 alert(warningMsg);
                 return;
             }
             
-            // Send order to backend for Telegram notification
             const items = [];
-            for (const dishId in cart) {
-                const item = cart[dishId];
-                items.push({ dish_id: dishId, quantity: item.quantity, price: item.price });
+            for (const entry of cart) {
+                items.push({ dish_id: entry.dishId, quantity: entry.quantity, price: entry.price });
+                (entry.extras || []).forEach(ex => {
+                    items.push({ dish_id: ex.dishId, quantity: ex.quantity, price: ex.price });
+                });
             }
             try {
                 await fetch(`${BACKEND_URL}/api/order-food`, {
@@ -1146,26 +1377,21 @@ async function initBackend() {
             }
             
             const whatsappNumber = '66957084335';
-            
-            // Build order message
             const orderGreetings = { en: 'Hello! I would like to order:\n', ru: 'Здравствуйте! Я хотел бы заказать:\n', th: 'สวัสดีครับ/ค่ะ! ฉันต้องการสั่งอาหาร:\n' };
             let messageText = orderGreetings[currentLang] || orderGreetings.en;
-            
-            let total = 0;
-            for (const dishId in cart) {
-                const item = cart[dishId];
-                messageText += ` - ${item.name} x${item.quantity}\n`;
-                total += item.price * item.quantity;
+            for (const entry of cart) {
+                messageText += ` - ${entry.name} x${entry.quantity}`;
+                if (entry.extras && entry.extras.length > 0) {
+                    entry.extras.forEach(ex => { messageText += ` + ${ex.name} x${ex.quantity}`; });
+                }
+                messageText += '\n';
             }
-            
+            const total = getCartTotal();
             const totalLabels = { en: `\nTotal: ${total.toFixed(2)} THB`, ru: `\nИтого: ${total.toFixed(2)} THB`, th: `\nรวม: ${total.toFixed(2)} THB` };
             messageText += totalLabels[currentLang] || totalLabels.en;
-            
             const message = encodeURIComponent(messageText);
             const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
             window.open(whatsappUrl, '_blank');
-            
-            // Clear cart after order
             localStorage.removeItem(CART_STORAGE_KEY);
             updateCartDisplay();
         }
@@ -1174,6 +1400,14 @@ async function initBackend() {
         window.addToCart = addToCart;
         window.removeFromCart = removeFromCart;
         window.clearCart = clearCart;
+        window.changeCartEntryQuantity = changeCartEntryQuantity;
+        window.openExtrasModal = openExtrasModal;
+        window.changeExtraQty = changeExtraQty;
+        window.removeOneFromCartForDish = removeOneFromCartForDish;
+        window._openExtrasModalForId = function(id) {
+            const item = menuItems.find(m => String(m.id) === id);
+            if (item) openExtrasModal(item);
+        };
         
         // Fetch with timeout
         async function fetchWithTimeout(url, options = {}, timeout = 5000) {
@@ -1265,7 +1499,7 @@ async function initBackend() {
                         e.preventDefault();
                         e.stopPropagation();
                         const cart = getCart();
-                        if (Object.keys(cart).length === 0) {
+                        if (cart.length === 0) {
                             const emptyMsgs = { en: 'Your cart is empty.', ru: 'Корзина пуста.', th: 'ตะกร้าว่างเปล่า' };
                             const msg = emptyMsgs[currentLang] || emptyMsgs.en;
                             alert(msg);
@@ -1275,6 +1509,20 @@ async function initBackend() {
                         window.location.href = 'checkout.html';
                     });
                 }
+                
+                // Extras modal: close and action buttons
+                const extrasModalClose = document.getElementById('extrasModalClose');
+                if (extrasModalClose) extrasModalClose.addEventListener('click', closeExtrasModal);
+                const extrasModalEl = document.getElementById('extrasModal');
+                if (extrasModalEl) {
+                    extrasModalEl.addEventListener('click', function(e) {
+                        if (e.target === extrasModalEl) closeExtrasModal();
+                    });
+                }
+                const extrasAddWithoutBtn = document.getElementById('extrasAddWithoutBtn');
+                if (extrasAddWithoutBtn) extrasAddWithoutBtn.addEventListener('click', extrasAddWithout);
+                const extrasAddToCartBtn = document.getElementById('extrasAddToCartBtn');
+                if (extrasAddToCartBtn) extrasAddToCartBtn.addEventListener('click', extrasAddToCart);
                 
                 // Setup clear cart button in cart modal
                 const cartModalClearBtn = document.getElementById('cartModalClearBtn');

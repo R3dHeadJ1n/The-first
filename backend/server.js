@@ -1524,10 +1524,11 @@ async function insertOrderWithItems(orderPayload) {
         );
         const orderDbId = orderResult.rows[0].id;
         for (const item of items) {
+            const subtotal = (item.quantity || 0) * (item.price || 0);
             await client.query(
-                `INSERT INTO order_items (order_id, dish_id, quantity, price)
-                 VALUES ($1, $2, $3, $4)`,
-                [orderDbId, item.dish_id || item.dishId, item.quantity, item.price]
+                `INSERT INTO order_items (order_id, dish_id, quantity, price, subtotal)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [orderDbId, item.dish_id || item.dishId, item.quantity, item.price, subtotal]
             );
         }
         await client.query('COMMIT');
@@ -1624,10 +1625,11 @@ async function updateOrderRecord(orderId, updates = {}) {
         if (itemsProvided) {
             await client.query('DELETE FROM order_items WHERE order_id = $1', [orderDbId]);
             for (const item of updates.items) {
+                const subtotal = (item.quantity || 0) * (item.price || 0);
                 await client.query(
-                    `INSERT INTO order_items (order_id, dish_id, quantity, price)
-                     VALUES ($1, $2, $3, $4)`,
-                    [orderDbId, item.dish_id, item.quantity, item.price]
+                    `INSERT INTO order_items (order_id, dish_id, quantity, price, subtotal)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [orderDbId, item.dish_id, item.quantity, item.price, subtotal]
                 );
             }
         }
@@ -2341,24 +2343,81 @@ app.post('/book-room', async (req, res) => {
 // MENU MANAGEMENT FUNCTIONS
 // ============================
 
+// Get map main_dish_id -> extra_dish_id[] from dish_extras table
+async function getDishExtrasMap(db) {
+    try {
+        const result = await db.query(
+            'SELECT main_dish_id, extra_dish_id FROM dish_extras'
+        );
+        const map = new Map();
+        for (const row of result.rows) {
+            const main = String(row.main_dish_id);
+            if (!map.has(main)) map.set(main, []);
+            map.get(main).push(String(row.extra_dish_id));
+        }
+        return map;
+    } catch (e) {
+        return new Map();
+    }
+}
+
+// Load EXTRAS menu items by dish_ids (for attaching to main dishes)
+async function loadExtrasItems(db, extraDishIds, publicOnly = false) {
+    if (!extraDishIds || extraDishIds.length === 0) return [];
+    const placeholders = extraDishIds.map((_, i) => `$${i + 1}`).join(',');
+    const where = publicOnly
+        ? `AND is_public = true`
+        : '';
+    const result = await db.query(
+        `SELECT dish_id, category, name, name_ru, name_th, price, image_path
+         FROM menu_items
+         WHERE dish_id IN (${placeholders}) AND category = 'EXTRAS' ${where}
+         ORDER BY name`,
+        extraDishIds
+    );
+    return result.rows.map(row => ({
+        id: row.dish_id,
+        category: row.category,
+        name: row.name,
+        name_ru: row.name_ru || null,
+        name_th: row.name_th || null,
+        price: row.price,
+        image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null
+    }));
+}
+
 // Load menu items from database (public only — for menu.html)
 async function loadMenuItemsFromDb() {
     try {
-        const result = await db.query(
-            `SELECT dish_id, category, name, name_ru, name_th, price, image_path
-             FROM menu_items
-             WHERE is_public = true
-             ORDER BY display_order, id`
-        );
-        return result.rows.map(row => ({
-            id: row.dish_id,
-            category: row.category,
-            name: row.name,
-            name_ru: row.name_ru || null,
-            name_th: row.name_th || null,
-            price: row.price,
-            image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null
-        }));
+        const [itemsResult, extrasMap] = await Promise.all([
+            db.query(
+                `SELECT dish_id, category, name, name_ru, name_th, price, image_path
+                 FROM menu_items
+                 WHERE is_public = true
+                 ORDER BY display_order, id`
+            ),
+            getDishExtrasMap(db)
+        ]);
+        const allExtraIds = [...new Set([].concat(...extrasMap.values()))];
+        const extrasItems = allExtraIds.length
+            ? await loadExtrasItems(db, allExtraIds, true)
+            : [];
+        const extrasById = new Map(extrasItems.map(e => [e.id, e]));
+
+        return itemsResult.rows.map(row => {
+            const item = {
+                id: row.dish_id,
+                category: row.category,
+                name: row.name,
+                name_ru: row.name_ru || null,
+                name_th: row.name_th || null,
+                price: row.price,
+                image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null
+            };
+            const extraIds = extrasMap.get(row.dish_id) || [];
+            item.available_extras = extraIds.map(id => extrasById.get(id)).filter(Boolean);
+            return item;
+        });
     } catch (error) {
         console.error('Error loading menu from database:', error);
         return [];
@@ -2368,21 +2427,35 @@ async function loadMenuItemsFromDb() {
 // Load ALL menu items (no is_public filter) — for admin onlyy
 async function loadAllMenuItemsFromDb() {
     try {
-        const result = await db.query(
-            `SELECT dish_id, category, name, name_ru, name_th, price, image_path, is_public
-             FROM menu_items
-             ORDER BY display_order, id`
-        );
-        return result.rows.map(row => ({
-            id: row.dish_id,
-            category: row.category,
-            name: row.name,
-            name_ru: row.name_ru || null,
-            name_th: row.name_th || null,
-            price: row.price,
-            image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null,
-            is_public: row.is_public !== false
-        }));
+        const [itemsResult, extrasMap] = await Promise.all([
+            db.query(
+                `SELECT dish_id, category, name, name_ru, name_th, price, image_path, is_public
+                 FROM menu_items
+                 ORDER BY display_order, id`
+            ),
+            getDishExtrasMap(db)
+        ]);
+        const allExtraIds = [...new Set([].concat(...extrasMap.values()))];
+        const extrasItems = allExtraIds.length
+            ? await loadExtrasItems(db, allExtraIds, false)
+            : [];
+        const extrasById = new Map(extrasItems.map(e => [e.id, e]));
+
+        return itemsResult.rows.map(row => {
+            const item = {
+                id: row.dish_id,
+                category: row.category,
+                name: row.name,
+                name_ru: row.name_ru || null,
+                name_th: row.name_th || null,
+                price: row.price,
+                image: row.image_path ? `/api/menu-images/${path.basename(row.image_path)}` : null,
+                is_public: row.is_public !== false
+            };
+            const extraIds = extrasMap.get(row.dish_id) || [];
+            item.available_extras = extraIds.map(id => extrasById.get(id)).filter(Boolean);
+            return item;
+        });
     } catch (error) {
         console.error('Error loading all menu items:', error);
         return [];
@@ -2477,6 +2550,47 @@ app.get('/api/admin/menu', verifyAdminToken, async (req, res) => {
     } catch (error) {
         console.error('Error loading admin menu:', error);
         res.status(500).json({ error: 'Failed to load menu' });
+    }
+});
+
+// GET /api/menu/:id/extras - List extra_dish_ids for a dish (admin or public)
+app.get('/api/menu/:id/extras', async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        const map = await getDishExtrasMap(db);
+        const extra_dish_ids = map.get(dishId) || [];
+        res.json({ extra_dish_ids });
+    } catch (error) {
+        console.error('Error getting dish extras:', error);
+        res.status(500).json({ error: 'Failed to get extras' });
+    }
+});
+
+// PUT /api/menu/:id/extras - Set which EXTRAS are available for a dish (admin only)
+app.put('/api/menu/:id/extras', verifyAdminToken, async (req, res) => {
+    try {
+        const dishId = req.params.id;
+        const { extra_dish_ids } = req.body || {};
+        const ids = Array.isArray(extra_dish_ids)
+            ? extra_dish_ids.map(id => String(id).trim()).filter(Boolean)
+            : [];
+        const existing = await db.query('SELECT 1 FROM menu_items WHERE dish_id = $1', [dishId]);
+        if (existing.rowCount === 0) {
+            return res.status(404).json({ error: 'Dish not found' });
+        }
+        await db.query('DELETE FROM dish_extras WHERE main_dish_id = $1', [dishId]);
+        for (const extraId of ids) {
+            if (extraId === dishId) continue;
+            await db.query(
+                'INSERT INTO dish_extras (main_dish_id, extra_dish_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [dishId, extraId]
+            );
+        }
+        clearMenuCache();
+        res.json({ success: true, extra_dish_ids: ids });
+    } catch (error) {
+        console.error('Error setting dish extras:', error);
+        res.status(500).json({ error: 'Failed to set extras' });
     }
 });
 

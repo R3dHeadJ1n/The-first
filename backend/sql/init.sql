@@ -66,3 +66,12 @@ CREATE TABLE IF NOT EXISTS menu_items (
 CREATE INDEX IF NOT EXISTS idx_menu_items_sku ON menu_items(sku) WHERE sku IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_menu_items_dish_id ON menu_items(dish_id);
 CREATE INDEX IF NOT EXISTS idx_menu_items_is_public ON menu_items(is_public) WHERE is_public = true;
+
+-- Which extras (EXTRAS category) are available for each main dish
+CREATE TABLE IF NOT EXISTS dish_extras (
+    main_dish_id TEXT NOT NULL REFERENCES menu_items(dish_id) ON DELETE CASCADE,
+    extra_dish_id TEXT NOT NULL REFERENCES menu_items(dish_id) ON DELETE CASCADE,
+    PRIMARY KEY (main_dish_id, extra_dish_id),
+    CHECK (main_dish_id <> extra_dish_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dish_extras_main ON dish_extras(main_dish_id);
