@@ -245,7 +245,7 @@ async function insertLoyverseReceipt(db, skuToDishId, receipt) {
 /**
  * Run full sync: fetch all receipts from Loyverse, insert new ones (by unique receipt_number).
  * @param {object} db - db module
- * @param {string} token - Loyverse API Bearer token
+ * @param {string} token - Loyverse API Bearer tokennn
  * @returns {Promise<{ fetched: number, inserted: number, skipped: number, errors: string[] }>}
  */
 async function syncLoyverseReceipts(db, token) {
