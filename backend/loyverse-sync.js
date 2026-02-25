@@ -76,62 +76,62 @@ const SKU_SKIP_LIST = new Set(['10040', '10041']);
 
 /**
  * Build map SKU -> dish_id from menu_items.
- * Only maps real SKUs; skips NULL, empty, or non-string sku (e.g. variants without POS SKU).
+ * menu_items.sku is INTEGER; Loyverse SKU is STRING — map with String keys for lookup.
  * @param {object} db - { query }
  * @returns {Promise<Map<string, string>>}
  */
 async function getSkuToDishIdMap(db) {
     const result = await db.query(
-        'SELECT dish_id, sku::text as sku FROM menu_items WHERE sku IS NOT NULL'
+        'SELECT dish_id, sku FROM menu_items WHERE sku IS NOT NULL'
     );
     const map = new Map();
     for (const row of result.rows) {
         if (!row.dish_id) continue;
-        if (!row.sku || typeof row.sku !== 'string' || !row.sku.trim()) continue;
         const skuKey = String(row.sku).trim();
-        if (SKU_SKIP_LIST.has(skuKey)) continue;
+        if (!skuKey || SKU_SKIP_LIST.has(skuKey)) continue;
         map.set(skuKey, row.dish_id);
     }
     return map;
 }
 
 /**
- * Normalize Loyverse line item to { sku, quantity, price, item_name, line_modifiers }.
- * API may use "price" or "unit_price"; SKU may be in "sku", "variant_id", or "item_id".
- * Loyverse price is source of truth. Subtotal = price * quantity (DB computes it).
+ * Normalize Loyverse line item to { sku, quantity, price, subtotal, name }.
+ * API may use "price" or "unit_price"; total_money may be present for subtotal.
+ * Loyverse price is source of truth. Subtotal = total_money if present, else price * quantity.
  */
 function normalizeLineItem(item) {
     if (!item) return null;
 
-    // Loyverse всегда даёт quantity
     const qty = Number(item.quantity ?? 0);
     if (!qty || qty <= 0) return null;
 
-    // Цена в Loyverse может быть:
-    // price: 180
-    // total_money: 180
-    // gross_total_money: 180
     let price = 0;
-
     if (item.price != null) {
-        price = Number(item.price);
+        const p = item.price;
+        price = typeof p === 'object' && p != null && p.amount != null ? Number(p.amount) : Number(p);
     } else if (item.total_money != null) {
-        price = Number(item.total_money);
+        const t = item.total_money;
+        price = typeof t === 'object' && t != null && t.amount != null ? Number(t.amount) : Number(t);
     } else if (item.gross_total_money != null) {
-        price = Number(item.gross_total_money);
+        const g = item.gross_total_money;
+        price = typeof g === 'object' && g != null && g.amount != null ? Number(g.amount) : Number(g);
     }
+    if (!Number.isFinite(price)) price = 0;
+    price = Math.round(price);
 
-    if (!Number.isFinite(price)) {
-        price = 0;
-    }
+    const totalMoneyRaw = item.total_money;
+    const totalMoneyVal = (totalMoneyRaw != null && typeof totalMoneyRaw === 'object' && totalMoneyRaw.amount != null)
+        ? totalMoneyRaw.amount
+        : totalMoneyRaw;
+    const subtotal = Math.round(Number.isFinite(Number(totalMoneyVal)) ? Number(totalMoneyVal) : price * qty);
 
-    // SKU как строка (совместимо с integer в БД)
     const sku = item.sku != null ? String(item.sku).trim() : null;
 
     return {
         sku,
         quantity: qty,
-        price: Math.round(price),
+        price,
+        subtotal,
         name: item.item_name || 'POS Item'
     };
 }
@@ -155,6 +155,7 @@ function buildUnmatchedDishId(item) {
 
 /**
  * Insert one Loyverse receipt as order + order_items. Skips if receipt_number already exists.
+ * Order is inserted and committed first. Items are inserted in a safe loop; one failed item does not roll back the order.
  * @param {object} db - { query, pool }
  * @param {Map<string, string>} skuToDishId
  * @param {object} receipt - Loyverse receipt: receipt_number, created_at, total_money, line_items
@@ -181,17 +182,15 @@ async function insertLoyverseReceipt(db, skuToDishId, receipt) {
         : totalMoney;
     const total = totalRaw != null ? Math.round(Number(totalRaw)) : 0;
     const lineItems = Array.isArray(receipt.line_items) ? receipt.line_items : [];
-
-console.log('LOYVERSE RAW line_items:', JSON.stringify(lineItems, null, 2));
-
-const normalizedItems = lineItems.map(normalizeLineItem).filter(Boolean);
-
-console.log('NORMALIZED ITEMS:', normalizedItems);
+    const normalizedItems = lineItems.map(normalizeLineItem).filter(Boolean);
 
     const publicId = `loyverse_${receiptNumber}`;
     const client = await db.pool.connect();
+    let orderId;
+
     try {
         await client.query('BEGIN');
+        console.log('[LOYVERSE] inserting order:', receiptNumber);
 
         const orderResult = await client.query(
             `INSERT INTO orders (public_id, receipt_number, customer_name, customer_phone, communication, created_at, status, total, type)
@@ -199,39 +198,48 @@ console.log('NORMALIZED ITEMS:', normalizedItems);
              RETURNING id`,
             [publicId, String(receiptNumber), createdAt, total]
         );
-        const orderId = orderResult.rows[0].id;
-
-        for (const item of normalizedItems) {
-            // sku приходит строкой, а в БД integer — приводим к строке безопасно
-            const skuKey = item.sku ? String(item.sku).trim() : null;
-            const dishId = skuKey ? skuToDishId.get(skuKey) : null;
-        
-            // ВАЖНО: не пропускаем позиции без SKU
-            const safeDishId = dishId || null;
-        
-            const subtotal = item.price * item.quantity;
-
-await client.query(
-  `INSERT INTO order_items (order_id, dish_id, quantity, price, subtotal)
-   VALUES ($1, $2, $3, $4, $5)`,
-  [
-    orderId,
-    dishId || null, // если SKU не найден — всё равно сохраняем
-    item.quantity,
-    item.price,
-    subtotal
-  ]
-);
-        }
-
+        orderId = orderResult.rows[0].id;
         await client.query('COMMIT');
-        return { inserted: true, orderId };
     } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-    } finally {
+        await client.query('ROLLBACK').catch(() => {});
         client.release();
+        throw err;
     }
+
+    // Insert items one by one; do not roll back order if one item fails
+    for (const item of normalizedItems) {
+        const sku = item.sku;
+        const dishId = sku != null ? skuToDishId.get(String(sku).trim()) : null;
+        const subtotal = item.subtotal;
+
+        console.log('[LOYVERSE] item:', {
+            sku: item.sku,
+            quantity: item.quantity,
+            price: item.price,
+            total_money: item.subtotal
+        });
+
+        try {
+            await client.query(
+                `INSERT INTO order_items (order_id, dish_id, quantity, price, subtotal)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [orderId, dishId, item.quantity, item.price, subtotal]
+            );
+        } catch (itemErr) {
+            console.error('[LOYVERSE] item insert failed (order saved):', {
+                orderId,
+                sku: item.sku,
+                quantity: item.quantity,
+                price: item.price,
+                subtotal,
+                error: itemErr.message
+            });
+            // continue to next item — no global rollback
+        }
+    }
+
+    client.release();
+    return { inserted: true, orderId };
 }
 
 /**
@@ -242,6 +250,8 @@ await client.query(
  */
 async function syncLoyverseReceipts(db, token) {
     const result = { fetched: 0, inserted: 0, skipped: 0, errors: [] };
+    console.log('[LOYVERSE] token exists:', !!process.env.LOYVERSE_API_TOKEN);
+
     let receipts = [];
     try {
         receipts = await fetchAllReceipts(token);
@@ -250,6 +260,7 @@ async function syncLoyverseReceipts(db, token) {
         return result;
     }
     result.fetched = receipts.length;
+    console.log('[LOYVERSE] receipts fetched:', receipts.length);
 
     const skuToDishId = await getSkuToDishIdMap(db);
 
